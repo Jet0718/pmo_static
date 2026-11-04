@@ -1,0 +1,17 @@
+# .NET / C# Build Artifacts
+bin/
+obj/
+*.user
+*.suo
+TestResults/
+
+# Node / Test Artifacts
+node_modules/
+coverage/
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vs/
+.vscode/
+*.log
