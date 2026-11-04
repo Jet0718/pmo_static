@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BDM 專案進度狀態分析統計儀表板 (Aras Innovator 12 SP9)</title>
+  <link rel="stylesheet" href="./css/dashboard.css" />
+</head>
+<body>
+  <div class="pmo-app-shell">
+    <!-- 頂部導航與檢視切換列 -->
+    <header class="pmo-header">
+      <div class="pmo-brand">
+        <span class="pmo-brand-badge">Aras 12 SP9 | BWCS-CRM</span>
+        <div class="pmo-title-group">
+          <h1>PMO 專案進度狀態分析統計系統</h1>
+          <p>整合 Project 客製欄位 (cn_* / bcs_* / Ph 1~12)、WBS 階段時程偏差與專案成員任務負荷分析</p>
+        </div>
+      </div>
+
+      <nav class="pmo-nav-tabs" aria-label="儀表板視圖切換">
+        <button type="button" class="pmo-tab-btn active" data-tab="SUMMARY" id="tab-btn-summary">
+          1. 全域多專案健康度總覽
+        </button>
+        <button type="button" class="pmo-tab-btn" data-tab="PROJECT_DETAIL" id="tab-btn-detail">
+          2. 階段達成率與時程偏差分析 (Ph 1~12 &amp; WBS)
+        </button>
+        <button type="button" class="pmo-tab-btn" data-tab="ASSIGNEES" id="tab-btn-assignees">
+          3. 專案成員 (Assignee) 任務負荷統計
+        </button>
+      </nav>
+    </header>
+
+    <!-- 多維度篩選工具列 -->
+    <section class="pmo-filter-bar" aria-label="專案篩選條件">
+      <div class="filter-item">
+        <label for="filter-state">專案狀態 (state)：</label>
+        <select id="filter-state" class="filter-control">
+          <option value="ALL">全部狀態 (ALL)</option>
+          <option value="Active">進行中 (Active)</option>
+          <option value="closed">已結案 (closed)</option>
+          <option value="pending">暫停中 (pending)</option>
+        </select>
+      </div>
+
+      <div class="filter-item">
+        <label for="filter-type">專案類型 (cn_project_type)：</label>
+        <select id="filter-type" class="filter-control">
+          <option value="ALL">全部類型 (ALL)</option>
+          <option value="1.Standard">1.Standard (標準專案)</option>
+          <option value="2.Professional">2.Professional (專業專案)</option>
+        </select>
+      </div>
+
+      <div class="filter-item">
+        <label for="filter-territory">服務中心 (territory)：</label>
+        <select id="filter-territory" class="filter-control">
+          <option value="ALL">全部服務中心 (ALL)</option>
+          <option value="台北服務中心">台北服務中心</option>
+          <option value="新竹服務中心">新竹服務中心</option>
+          <option value="台中服務中心">台中服務中心</option>
+          <option value="台南服務中心">台南服務中心</option>
+        </select>
+      </div>
+
+      <div class="filter-item">
+        <label for="filter-team">執行團隊 (team_id)：</label>
+        <select id="filter-team" class="filter-control">
+          <option value="ALL">全部團隊 (ALL)</option>
+          <option value="TEAM_PLM1">PLM 顧問一部</option>
+          <option value="TEAM_PLM2">PLM 顧問二部</option>
+        </select>
+      </div>
+
+      <div class="filter-item">
+        <label for="filter-health">健康度燈號：</label>
+        <select id="filter-health" class="filter-control">
+          <option value="ALL">全部燈號 (ALL)</option>
+          <option value="GREEN">綠燈 (進度正常)</option>
+          <option value="YELLOW">黃燈 (進度警示)</option>
+          <option value="RED">紅燈 (嚴重延遲)</option>
+        </select>
+      </div>
+
+      <div class="filter-item" style="flex: 1; min-width: 200px;">
+        <label for="filter-keyword">關鍵字：</label>
+        <input
+          type="text"
+          id="filter-keyword"
+          class="filter-control"
+          style="width: 100%;"
+          placeholder="搜尋專案編號、名稱、客戶或專案經理..."
+        />
+      </div>
+
+      <button type="button" class="btn-action btn-secondary" id="btn-reset-filters">
+        重置篩選
+      </button>
+    </section>
+
+    <!-- 動態視圖渲染容器 -->
+    <main id="pmo-view-container"></main>
+  </div>
+
+  <!-- 載入 S.O.L.I.D 前端模組 -->
+  <script src="./js/arasApiClient.js"></script>
+  <script src="./js/dashboardStore.js"></script>
+  <script src="./js/svgChartEngine.js"></script>
+  <script src="./js/dashboardApp.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      if (window.PMODashboardApp && typeof window.PMODashboardApp.initDashboardApp === "function") {
+        window.pmoStoreInstance = window.PMODashboardApp.initDashboardApp(document);
+      }
+    });
+  </script>
+</body>
+</html>
