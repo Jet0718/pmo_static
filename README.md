@@ -45,7 +45,10 @@ c:\TEST\pmo_static\
 │   ├── imports.mf           # Aras Import 工具入口設定檔
 │   └── PMO_Analytics/
 │       └── Import/
-│           └── PMO_ProjectAnalytics_Package.xml # 完整 Method 與 TOC View AML 定義
+│           ├── Method/      # 後端 Server Method AML
+│           │   └── PMO_ProjectAnalytics_API.xml
+│           └── ItemType/    # TOC View 掛載 ItemType AML
+│               └── PMO_Progress_Analytics.xml
 └── tests/                   # 單元測試套件
     ├── frontend.test.js     # 前端 Node.js 單元測試
     └── BackendTests/        # 後端 C# .NET 單元測試與 Aras Wrapper 模擬器
@@ -106,22 +109,29 @@ Aras 預設會從安裝目錄下的 `Innovator\Client\customer\` 讀取客製化
 您可以選擇 **「方式 A：使用 Aras Package Import 工具一鍵匯入（推薦）」** 或 **「方式 B：透過 Aras 介面手動建立」**。
 
 #### 方式 A：使用 Aras Package Import Export Utilities 一鍵匯入（推薦）
-1. 開啟 Aras 官方匯入工具 **`PackageImportExportUtilities`**（內含 `Import.exe`）。
-2. 在連線設定填入：
+1. 確保最新 AML Package 已產生（包含分門別類的 `Method/` 與 `ItemType/` 目錄結構）：
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File c:\TEST\pmo_static\aml\build_aml_package.ps1
+   ```
+2. 開啟 Aras 官方匯入工具 **`PackageImportExportUtilities`**（路徑如 `c:\utils\PackageImportExportUtilities_15.0.4\Import\Import.exe`）。
+3. 在連線設定填入：
    - **Server URL**：`https://bco.openplm.com.tw/innovatorbw`
    - **Database**：`BWCS-CRM`
    - **Login**：`admin`（與對應密碼）
-   - 點擊 **Test Connection** 確認連線成功。
-3. 在匯入包裹設定選擇：
-   - **Manifest File (`imports.mf`)**：瀏覽並選取本專案下的 `c:\TEST\pmo_static\aml\imports.mf`。
-   - **Available Packages**：勾選 `com.bdm.pmo.analytics`。
-   - **Type**：選擇 **`Merge`**（若已存在則更新，不存在則新增）。
-   - **Mode**：選擇 **`Thorough Mode`**。
-4. 點擊 **Import** 執行匯入。工具將自動建立：
-   - C# Server Method：`PMO_ProjectAnalytics_API`
-   - TOC 掛載節點 ItemType：`PMO_Progress_Analytics`（中文顯示名稱：**PMO 專案進度統計儀表板**，掛載於 `Portfolio` 分類下）
+   - 點擊 **Login**（或 Test Connection）確認連線成功。
+4. 在匯入包裹設定選擇：
+   - **Manifest File (`imports.mf`)**：點擊 Browse 瀏覽並選取 `c:\TEST\pmo_static\aml\imports.mf`。
+   - **Available for Import**：勾選 `com.bdm.pmo.analytics`。
+   - **Type**：選擇 **`Merge`**（已存在項目就地更新，不存在則新增）。
+   - **Mode**：選擇 **`Thorough Mode`**（完整校驗依賴）。
+5. 點擊 **Import** 執行匯入。工具將依序建立：
+   - C# Server Method：`PMO_ProjectAnalytics_API`（位於 `Method/PMO_ProjectAnalytics_API.xml`）
+   - TOC 掛載節點 ItemType：`PMO_Progress_Analytics`（位於 `ItemType/PMO_Progress_Analytics.xml`，中文名稱：**PMO 專案進度統計儀表板**，掛載於 `Portfolio` 分類下，具備 `TOC Access`、`TOC View`、`Allowed Permission` 與 `Can Add` 權限關聯）
 
-> **提示**：若您日後修改了 `backend/PMO_ProjectAnalytics_API.cs`，只需執行以下指令即可重新打包最新 AML：
+> **注意事項**：
+> Aras Package Import 工具內部採用嚴格的 ItemType 子目錄尋訪機制 (`Directory.GetDirectories`) 與 `build.xsl` 相依性排序規則。若將 XML 單檔平鋪在 `Import\` 根目錄或使用非標準 action，匯入工具將無法匹配任何項目。本專案腳本已自動依照 Aras 標準架構拆分建立。
+
+> **提示**：若您日後修改了 `backend/PMO_ProjectAnalytics_API.cs`，只需再次執行以下指令即可重新打包最新 AML：
 > ```powershell
 > powershell -ExecutionPolicy Bypass -File c:\TEST\pmo_static\aml\build_aml_package.ps1
 > ```

@@ -563,3 +563,38 @@ classDiagram
 | `GET /api/v1/dashboard/wbs/{proj_num}` | `GET_WBS_ANALYSIS` | `proj_num` | 單一專案完整 `WBS Element` 遞迴樹狀結構 (`wbs_tree`)、各層級完成度、SPI/CPI、時程偏差與下轄任務狀態 |
 | `GET /api/v1/dashboard/assignees` | `GET_ASSIGNEE_WORKLOAD` | `proj_num` (選填), `team_id` (選填), `state` | 跨專案或單一專案之成員 (`Assignee`) 任務負荷排行榜：總任務、已完成、進行中、未開始、逾期數、要徑任務數、預估工時 (`work_est`)、實際工時 (`actual_work`)、完成率 (%) 與負荷等級 |
 | `GET /api/v1/health` | `HEALTH_CHECK` | 無 | 系統健康檢查與版本資訊 |
+
+---
+
+## 12. Aras AML Package 封裝規範與部署架構 (Package Architecture & Deployment)
+
+### 12.1 Aras Package 目錄結構規範
+Aras Innovator 官方匯入工具 **`PackageImportExportUtilities`**（包含 `Import.exe` / `ConsoleUpgrade.exe`）採用標準目錄階層模型：
+1. **清單檔 (`imports.mf`)**：
+   定義包裹名稱與 AML 檔案所在目錄路徑：
+   ```xml
+   <imports>
+     <package name="com.bdm.pmo.analytics" path="PMO_Analytics\Import" />
+   </imports>
+   ```
+2. **ItemType 子目錄分割結構**：
+   `Import.exe` 的 `LoadPackageDom` 核心引擎會執行 `Directory.GetDirectories(solutionPath)`。因此，匯入路徑下**嚴禁將 AML 檔案平鋪放置於根目錄**，必須依照欲建立/更新的 ItemType 類型劃分子資料夾：
+   - `PMO_Analytics\Import\Method\PMO_ProjectAnalytics_API.xml`：封裝 C# RESTful Server Method。
+   - `PMO_Analytics\Import\ItemType\PMO_Progress_Analytics.xml`：封裝全域多專案儀表板入口 ItemType 及其 TOC 關聯 (`TOC Access`、`TOC View`、`Allowed Permission`、`Can Add`)。
+
+### 12.2 AML 動作屬性 (`action="add"`) 與 Merge 機制
+- **標準動作宣告**：所有匯入 XML 根項目的 action 必須宣告為 `action="add"`。
+- **build.xsl 相依性排序機制**：
+  Aras 工具在載入各子目錄的 AML 項目後，會透過內建 `build.xsl` 依據平台核心依賴順序重新排序（例如先 `Identity`/`Permission`/`Method`，再進行 `ItemType`）。`build.xsl` 的範本選擇規則為 `AML/Item[@type='...'][@action='add']`，若設定非 add（如自訂 merge）會導致 XSL 範本無法匹配而過濾掉該項目。
+- **Merge 匯入轉譯**：
+  在執行 `Import.exe` 時勾選 `Merge` 模式，工具內部會自動查詢目標資料庫中是否存在相同 ID/keyed_name 的項目：
+  - 若**不存在**：以 `add` 動作執行寫入。
+  - 若**已存在**：自動轉譯為 `edit` 動作進行安全就地更新，確保不會發生重複建立或覆蓋衝突。
+
+### 12.3 TOC View 掛載機制
+`PMO_Progress_Analytics` ItemType 的目的為在 Aras Web Client 的左側目錄樹 (TOC) 中掛載進入點：
+- **分類位置**：`Portfolio`。
+- **檢視頁面**：`<start_page>../customer/pmo_static/index.html</start_page>`。
+- **權限配置**：檢視權限授予 `World` (全體登入使用者)，新增權限保留給 `Administrators`。
+- **運行模式**：使用者點擊 TOC 項目時，Aras Client 會在主工作區 iframe 內載入該 HTML5 儀表板，儀表板透過 `top.aras.applyMethod` 直接與後端 `PMO_ProjectAnalytics_API` 進行通訊。
+

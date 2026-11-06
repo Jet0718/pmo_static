@@ -15,3 +15,4 @@ Thumbs.db
 .vs/
 .vscode/
 *.log
+.codegraph/
