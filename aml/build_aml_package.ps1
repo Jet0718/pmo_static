@@ -80,7 +80,7 @@ $itemTypeAml = @"
       <!-- Allowed Permission：標準預設存取權限 -->
       <Item type="Allowed Permission" id="5E43F4A5B6C74D048516C7D8E9F0A1B2" action="add">
         <is_default>1</is_default>
-        <related_id keyed_name="Default Access" type="Permission">9122CD065CF141409F776EB4CEE8C51E</related_id>
+        <related_id keyed_name="Default Access" type="Permission">9122CD065CF04141B8EFE263FC80BEA4</related_id>
         <sort_order>128</sort_order>
       </Item>
       <!-- Can Add：系統管理員具備新增權限 -->

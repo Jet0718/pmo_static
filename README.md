@@ -128,8 +128,9 @@ Aras 預設會從安裝目錄下的 `Innovator\Client\customer\` 讀取客製化
    - C# Server Method：`PMO_ProjectAnalytics_API`（位於 `Method/PMO_ProjectAnalytics_API.xml`）
    - TOC 掛載節點 ItemType：`PMO_Progress_Analytics`（位於 `ItemType/PMO_Progress_Analytics.xml`，中文名稱：**PMO 專案進度統計儀表板**，掛載於 `Portfolio` 分類下，具備 `TOC Access`、`TOC View`、`Allowed Permission` 與 `Can Add` 權限關聯）
 
-> **注意事項**：
-> Aras Package Import 工具內部採用嚴格的 ItemType 子目錄尋訪機制 (`Directory.GetDirectories`) 與 `build.xsl` 相依性排序規則。若將 XML 單檔平鋪在 `Import\` 根目錄或使用非標準 action，匯入工具將無法匹配任何項目。本專案腳本已自動依照 Aras 標準架構拆分建立。
+> **注意事項與常見問題排查**：
+> 1. **目錄結構要求**：Aras Package Import 工具內部採用嚴格的 ItemType 子目錄尋訪機制 (`Directory.GetDirectories`) 與 `build.xsl` 相依性排序規則。若將 XML 單檔平鋪在 `Import\` 根目錄或使用非標準 action，匯入工具將無法匹配任何項目。本專案腳本已自動依照 Aras 標準架構拆分子目錄 (`Method/`、`ItemType/`)。
+> 2. **Permission GUID 相依校驗**：目標資料庫 `BWCS-CRM` 之 `Default Access` Permission GUID 為 `9122CD065CF04141B8EFE263FC80BEA4`。若 Permission GUID 不匹配，`Import.exe` 會在 Thorough Mode 剝離該關聯，造成 Aras 核心 CUI `PresentationConfiguration` 在生成時引發 Primary Key 衝突例外。本專案 AML 已精準校準為該實體 GUID。
 
 > **提示**：若您日後修改了 `backend/PMO_ProjectAnalytics_API.cs`，只需再次執行以下指令即可重新打包最新 AML：
 > ```powershell

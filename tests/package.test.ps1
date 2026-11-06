@@ -33,6 +33,10 @@ $itItem = $itXml.SelectSingleNode("/AML/Item[@type='ItemType']")
 if ($null -eq $itItem -or $itItem.action -ne "add" -or $itItem.name -ne "PMO_Progress_Analytics") {
     throw "ItemType AML 格式不合規！"
 }
+$permRel = $itItem.SelectSingleNode("Relationships/Item[@type='Allowed Permission']/related_id")
+if ($null -eq $permRel -or $permRel.InnerText -ne "9122CD065CF04141B8EFE263FC80BEA4") {
+    throw "Allowed Permission GUID 不相容！預期 9122CD065CF04141B8EFE263FC80BEA4"
+}
 $tocView = $itItem.SelectSingleNode("Relationships/Item[@type='TOC View']")
 if ($null -eq $tocView -or $tocView.start_page -ne "../customer/pmo_static/index.html") {
     throw "TOC View 設定不正確！"

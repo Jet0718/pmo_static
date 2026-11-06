@@ -591,10 +591,15 @@ Aras Innovator 官方匯入工具 **`PackageImportExportUtilities`**（包含 `I
   - 若**不存在**：以 `add` 動作執行寫入。
   - 若**已存在**：自動轉譯為 `edit` 動作進行安全就地更新，確保不會發生重複建立或覆蓋衝突。
 
-### 12.3 TOC View 掛載機制
+### 12.3 TOC View 掛載機制與權限配置
 `PMO_Progress_Analytics` ItemType 的目的為在 Aras Web Client 的左側目錄樹 (TOC) 中掛載進入點：
 - **分類位置**：`Portfolio`。
 - **檢視頁面**：`<start_page>../customer/pmo_static/index.html</start_page>`。
-- **權限配置**：檢視權限授予 `World` (全體登入使用者)，新增權限保留給 `Administrators`。
+- **權限配置**：
+  - `Allowed Permission`：關聯至目標資料庫 `Default Access` Permission（於 `BWCS-CRM` 中之標準 GUID 為 `9122CD065CF04141B8EFE263FC80BEA4`）。
+  - `Can Add`：關聯至 `Administrators` Identity（GUID: `2618D6F5A90949BAA7E920D1B04C7EE1`）。
+  - `TOC Access` / `TOC View`：授予 `World` Identity（GUID: `A73B655731924CD0B027E4F4D5FCC0A9`）。
+- **依賴解析防護**：
+  在 Aras 12 中，ItemType 建立時必須具備合法的 `Allowed Permission` 實體 ID，若參照不存在的 Permission ID，`Import.exe` 會將其標記為未解析參照 (Unresolved Reference) 並剝離該關聯，致使 Aras 核心 CUI `PresentationConfiguration` 自動生成邏輯因缺少預設權限而引發 SQL Primary Key 衝突例外。
 - **運行模式**：使用者點擊 TOC 項目時，Aras Client 會在主工作區 iframe 內載入該 HTML5 儀表板，儀表板透過 `top.aras.applyMethod` 直接與後端 `PMO_ProjectAnalytics_API` 進行通訊。
 
