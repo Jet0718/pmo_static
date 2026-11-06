@@ -1,6 +1,6 @@
 ﻿param(
     [ValidateSet("add", "edit")]
-    [string]$Action = "edit"
+    [string]$Action = "add"
 )
 
 # PowerShell 腳本：將後端 PMO_ProjectAnalytics_API.cs 與前端 TOC 設定封裝為標準 Aras AML Import Package
