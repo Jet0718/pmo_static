@@ -582,14 +582,14 @@ Aras Innovator 官方匯入工具 **`PackageImportExportUtilities`**（包含 `I
    - `PMO_Analytics\Import\Method\PMO_ProjectAnalytics_API.xml`：封裝 C# RESTful Server Method。
    - `PMO_Analytics\Import\ItemType\PMO_Progress_Analytics.xml`：封裝全域多專案儀表板入口 ItemType 及其 TOC 關聯 (`TOC Access`、`TOC View`、`Allowed Permission`、`Can Add`)。
 
-### 12.2 AML 動作屬性 (`action="add"`) 與 Merge 機制
-- **標準動作宣告**：所有匯入 XML 根項目的 action 必須宣告為 `action="add"`。
+### 12.2 AML 動作屬性 (`action="add"` / `action="edit"`) 與 Merge 機制
+- **標準動作宣告**：匯入 XML 根項目的 action 宣告需遵循以下原則：
+  - 當建立全新物件時，使用 `action="add"`。
+  - 當目標資料庫已存在該實體（如已透過 Web Client 或前次建立完成）時，根節點及其關聯子項目應指定為 `action="edit"`。
 - **build.xsl 相依性排序機制**：
-  Aras 工具在載入各子目錄的 AML 項目後，會透過內建 `build.xsl` 依據平台核心依賴順序重新排序（例如先 `Identity`/`Permission`/`Method`，再進行 `ItemType`）。`build.xsl` 的範本選擇規則為 `AML/Item[@type='...'][@action='add']`，若設定非 add（如自訂 merge）會導致 XSL 範本無法匹配而過濾掉該項目。
-- **Merge 匯入轉譯**：
-  在執行 `Import.exe` 時勾選 `Merge` 模式，工具內部會自動查詢目標資料庫中是否存在相同 ID/keyed_name 的項目：
-  - 若**不存在**：以 `add` 動作執行寫入。
-  - 若**已存在**：自動轉譯為 `edit` 動作進行安全就地更新，確保不會發生重複建立或覆蓋衝突。
+  Aras 工具在載入各子目錄的 AML 項目後，會透過內建 `build.xsl` 依據平台核心依賴順序重新排序。`build.xsl` 同時具備對 `AML/Item[@type='...'][@action='add']` 與 `AML/Item[@type='...'][@action='edit']` 的解析能力，會將 Method 與 ItemType 依照相依關係完整保留輸出。
+- **避免重複建立引發之 CUI 衝突**：
+  在 Aras 12 中，對已存在的 ItemType 執行 `action="add"` 會嘗試重新生成關聯之 `PresentationConfiguration`，進而觸發 SQL Primary Key 重複約束例外。將已就緒的 ItemType 宣告為 `action="edit"` 可直接執行就地安全屬性覆寫，並順利由 `Import.exe` 完成 PackageDefinition 的綁定與註冊。
 
 ### 12.3 TOC View 掛載機制與權限配置
 `PMO_Progress_Analytics` ItemType 的目的為在 Aras Web Client 的左側目錄樹 (TOC) 中掛載進入點：

@@ -23,14 +23,14 @@ Write-Host " [PASS] 2. 子目錄架構 (Method/ 與 ItemType/) 存在且符合�
 # 3. 驗證 Method 與 ItemType 格式
 [xml]$mXml = Get-Content $methodXmlPath
 $mItem = $mXml.SelectSingleNode("/AML/Item[@type='Method']")
-if ($null -eq $mItem -or $mItem.action -ne "add" -or $mItem.name -ne "PMO_ProjectAnalytics_API") {
+if ($null -eq $mItem -or $mItem.action -notin @("add", "edit") -or $mItem.name -ne "PMO_ProjectAnalytics_API") {
     throw "Method AML 格式不合規！"
 }
 Write-Host " [PASS] 3. Method AML 驗證通過: $($mItem.name), Action=$($mItem.action)"
 
 [xml]$itXml = Get-Content $itemTypeXmlPath
 $itItem = $itXml.SelectSingleNode("/AML/Item[@type='ItemType']")
-if ($null -eq $itItem -or $itItem.action -ne "add" -or $itItem.name -ne "PMO_Progress_Analytics") {
+if ($null -eq $itItem -or $itItem.action -notin @("add", "edit") -or $itItem.name -ne "PMO_Progress_Analytics") {
     throw "ItemType AML 格式不合規！"
 }
 $permRel = $itItem.SelectSingleNode("Relationships/Item[@type='Allowed Permission']/related_id")
