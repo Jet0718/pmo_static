@@ -36,20 +36,24 @@
       <div class="filter-item">
         <label for="filter-state">專案狀態 (state)：</label>
         <select id="filter-state" class="filter-control">
+          <option value="Active" selected>進行中 (Active)</option>
           <option value="ALL">全部狀態 (ALL)</option>
-          <option value="Active">進行中 (Active)</option>
           <option value="closed">已結案 (closed)</option>
           <option value="pending">暫停中 (pending)</option>
         </select>
       </div>
 
       <div class="filter-item">
-        <label for="filter-type">專案類型 (cn_project_type)：</label>
-        <select id="filter-type" class="filter-control">
-          <option value="ALL">全部類型 (ALL)</option>
-          <option value="1.Standard">1.Standard (標準專案)</option>
-          <option value="2.Professional">2.Professional (專業專案)</option>
-        </select>
+        <label>專案類型 (cn_project_type 複選)：</label>
+        <div id="filter-type-checkboxes" style="display:inline-flex;gap:10px;align-items:center;background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:5px 10px;font-size:13px;">
+          <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;color:#1e293b;">
+            <input type="checkbox" class="js-filter-type" value="1.Standard" checked /> 1.Standard
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;color:#1e293b;">
+            <input type="checkbox" class="js-filter-type" value="2.Professional" checked /> 2.Professional
+          </label>
+        </div>
+        <input type="hidden" id="filter-type" value="1.Standard,2.Professional" />
       </div>
 
       <div class="filter-item">
@@ -67,8 +71,12 @@
         <label for="filter-team">執行團隊 (team_id)：</label>
         <select id="filter-team" class="filter-control">
           <option value="ALL">全部團隊 (ALL)</option>
-          <option value="TEAM_PLM1">PLM 顧問一部</option>
-          <option value="TEAM_PLM2">PLM 顧問二部</option>
+          <option value="TPS">TPS 顧問團隊</option>
+          <option value="ICS">ICS 顧問團隊</option>
+          <option value="PMO">PMO 專案管理處</option>
+          <option value="SUS">SUS 永續服務處</option>
+          <option value="SHS">SHS 顧問團隊</option>
+          <option value="Other">其他團隊 (Other)</option>
         </select>
       </div>
 

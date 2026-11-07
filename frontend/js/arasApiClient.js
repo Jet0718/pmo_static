@@ -25,8 +25,8 @@
       pm_id: "PM_CHEN",
       pm_name: "陳建宏",
       manager_name: "林總監",
-      team_id: "TEAM_PLM1",
-      team_name: "PLM 顧問一部",
+      team_id: "TPS",
+      team_name: "TPS 顧問團隊",
       wbs_id: "WBS_ROOT_2127",
       percent_complete: 76.5,
       actual_progress: 76.5,
@@ -152,8 +152,8 @@
       pm_id: "PM_LIU",
       pm_name: "劉雅雯",
       manager_name: "林總監",
-      team_id: "TEAM_PLM2",
-      team_name: "PLM 顧問二部",
+      team_id: "ICS",
+      team_name: "ICS 顧問團隊",
       wbs_id: "WBS_ROOT_2135",
       percent_complete: 58.0,
       actual_progress: 58.0,
@@ -270,8 +270,8 @@
       pm_id: "PM_CHEN",
       pm_name: "陳建宏",
       manager_name: "林總監",
-      team_id: "TEAM_PLM1",
-      team_name: "PLM 顧問一部",
+      team_id: "PMO",
+      team_name: "PMO 專案管理處",
       wbs_id: "WBS_ROOT_2142",
       percent_complete: 41.0,
       actual_progress: 41.0,
@@ -384,12 +384,12 @@
       project_mode: "Standard",
       customer_name: "瑞生醫電股份",
       po_number: "PO-2026-0512",
-      state: "closed",
+      state: "Active",
       pm_id: "PM_LIU",
       pm_name: "劉雅雯",
       manager_name: "林總監",
-      team_id: "TEAM_PLM2",
-      team_name: "PLM 顧問二部",
+      team_id: "SUS",
+      team_name: "SUS 永續服務處",
       wbs_id: "WBS_ROOT_2110",
       percent_complete: 100.0,
       actual_progress: 100.0,
@@ -461,6 +461,126 @@
           total_est_hours: 800, total_actual_hours: 714.3, remaining_est_hours: 0, load_level: "LOW", project_count: 2
         }
       ]
+    },
+    {
+      id: "E505F60607080910A111B222C303D404",
+      proj_num: 2155,
+      project_name: "工廠節能與碳足跡追蹤數位化專案",
+      project_type: "1.Standard",
+      classification: "1.Standard",
+      territory: "新竹服務中心",
+      project_mode: "Turnkey",
+      customer_name: "綠能智慧股份",
+      po_number: "PO-2026-1130",
+      state: "Active",
+      pm_id: "PM_CHEN",
+      pm_name: "陳建宏",
+      manager_name: "林總監",
+      team_id: "SHS",
+      team_name: "SHS 顧問團隊",
+      wbs_id: "WBS_ROOT_2155",
+      percent_complete: 82.0,
+      actual_progress: 82.0,
+      expected_progress: 80.0,
+      progress_gap: -2.0,
+      health_status: "GREEN",
+      rag_status: "Green",
+      bcs_status_label: "On Track",
+      bcs_status_color: "#10B981",
+      compl_category: "80%~90%",
+      delay_days: 0,
+      pending_days: 0,
+      spi: 1.05,
+      cpi: 1.10,
+      planned_value: 600,
+      earned_value: 630,
+      actual_cost: 572,
+      cn_sv: 30,
+      cn_cv: 58,
+      exp_mandays: 75,
+      rollup_work_est: 600,
+      remainder_hours: 108,
+      budget_exec_rate: 95.3,
+      total_tasks: 8,
+      completed_tasks: 6,
+      in_progress_tasks: 2,
+      not_started_tasks: 0,
+      overdue_tasks: 0,
+      critical_task_count: 2,
+      critical_overdue_count: 0,
+      milestone_count: 2,
+      milestone_completed_count: 2,
+      sched_start: "2026-05-01",
+      sched_due: "2026-11-30",
+      init_plan_start: "2026-05-01",
+      init_plan_finish: "2026-11-30",
+      act_start: "2026-05-01",
+      act_finish: "",
+      phases: [
+        { phase_no: 1, label: "Ph 1", percent_compl: 100, raw_color: "#00FF00", light: "GREEN", hex_color: "#10B981" },
+        { phase_no: 2, label: "Ph 2", percent_compl: 100, raw_color: "#00FF00", light: "GREEN", hex_color: "#10B981" },
+        { phase_no: 3, label: "Ph 3", percent_compl: 80, raw_color: "#00FF00", light: "GREEN", hex_color: "#10B981" }
+      ],
+      wbs_items: [],
+      assignees: []
+    },
+    {
+      id: "F60607080910A111B222C303D404E505",
+      proj_num: 2160,
+      project_name: "跨域協同平台客製擴充試點案",
+      project_type: "2.Professional",
+      classification: "2.Professional",
+      territory: "台北服務中心",
+      project_mode: "Agile",
+      customer_name: "大宇資訊科技",
+      po_number: "PO-2026-1201",
+      state: "Active",
+      pm_id: "PM_LIU",
+      pm_name: "劉雅雯",
+      manager_name: "林總監",
+      team_id: "Other",
+      team_name: "其他團隊",
+      wbs_id: "WBS_ROOT_2160",
+      percent_complete: 65.0,
+      actual_progress: 65.0,
+      expected_progress: 65.0,
+      progress_gap: 0.0,
+      health_status: "GREEN",
+      rag_status: "Green",
+      bcs_status_label: "On Track",
+      bcs_status_color: "#10B981",
+      compl_category: "60%~70%",
+      delay_days: 0,
+      pending_days: 0,
+      spi: 1.0,
+      cpi: 1.0,
+      planned_value: 400,
+      earned_value: 400,
+      actual_cost: 400,
+      cn_sv: 0,
+      cn_cv: 0,
+      exp_mandays: 50,
+      rollup_work_est: 400,
+      remainder_hours: 140,
+      budget_exec_rate: 100,
+      total_tasks: 5,
+      completed_tasks: 3,
+      in_progress_tasks: 2,
+      not_started_tasks: 0,
+      overdue_tasks: 0,
+      critical_task_count: 1,
+      critical_overdue_count: 0,
+      milestone_count: 1,
+      milestone_completed_count: 1,
+      sched_start: "2026-07-01",
+      sched_due: "2026-12-15",
+      init_plan_start: "2026-07-01",
+      init_plan_finish: "2026-12-15",
+      act_start: "2026-07-01",
+      act_finish: "",
+      phases: [],
+      wbs_items: [],
+      assignees: []
     }
   ];
 
@@ -532,14 +652,23 @@
       if (stateFilter && stateFilter.toUpperCase() !== "ALL" && String(p.state || "").toLowerCase() !== stateFilter.toLowerCase()) {
         return false;
       }
-      if (typeFilter && typeFilter !== "ALL" && p.project_type !== typeFilter) {
-        return false;
+      if (typeFilter && typeFilter !== "ALL") {
+        var types = typeFilter.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
+        if (types.length > 0 && types.indexOf(p.project_type) < 0) {
+          return false;
+        }
       }
       if (territoryFilter && territoryFilter !== "ALL" && p.territory !== territoryFilter) {
         return false;
       }
-      if (teamFilter && teamFilter !== "ALL" && p.team_id !== teamFilter) {
-        return false;
+      if (teamFilter && teamFilter !== "ALL") {
+        if (teamFilter === "Other") {
+          if (["TPS", "ICS", "PMO", "SUS", "SHS"].indexOf(p.team_id) >= 0) {
+            return false;
+          }
+        } else if (p.team_id !== teamFilter) {
+          return false;
+        }
       }
       if (pmFilter && pmFilter !== "ALL" && p.pm_id !== pmFilter) {
         return false;
@@ -823,6 +952,48 @@
     }
 
     // 使用本地端統計引擎計算回應 (與後端 C# 控制器輸出格式 100% 對齊)
+    if (route.indexOf("/api/v1/dashboard/team-summary") === 0 || route === "GET_TEAM_SUMMARY") {
+      var stateFilter = String(params.state || "Active").toLowerCase();
+      var typeFilter = String(params.project_type || "1.Standard,2.Professional");
+      var allowedTypes = typeFilter.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+
+      var teamKeys = ["TPS", "ICS", "PMO", "SUS", "SHS", "Other"];
+      var teamNames = ["TPS 顧問團隊", "ICS 顧問團隊", "PMO 專案管理處", "SUS 永續服務處", "SHS 顧問團隊", "其他團隊"];
+      var teamColors = ["#2563eb", "#0ea5e9", "#8b5cf6", "#10b981", "#f59e0b", "#64748b"];
+      var counts = { TPS: 0, ICS: 0, PMO: 0, SUS: 0, SHS: 0, Other: 0 };
+      var totalActive = 0;
+
+      this.mockProjects.forEach(function (p) {
+        var pState = String(p.state || "").toLowerCase();
+        if (stateFilter !== "all" && pState !== stateFilter) return;
+        if (typeFilter !== "ALL" && allowedTypes.length > 0 && allowedTypes.indexOf(p.project_type) < 0) return;
+
+        totalActive++;
+        var tid = p.team_id || "";
+        if (counts.hasOwnProperty(tid)) {
+          counts[tid]++;
+        } else {
+          counts["Other"]++;
+        }
+      });
+
+      var teams = teamKeys.map(function (key, idx) {
+        return {
+          team_id: key,
+          team_name: teamNames[idx],
+          active_count: counts[key] || 0,
+          color: teamColors[idx]
+        };
+      });
+
+      return {
+        status: "success",
+        route: "/api/v1/dashboard/team-summary",
+        total_active_projects: totalActive,
+        teams: teams
+      };
+    }
+
     if (route.indexOf("/api/v1/dashboard/project") === 0 || route === "GET_PROJECT_DETAIL") {
       var targetNum = Number(params.proj_num || 0);
       var found = this.mockProjects.find(function (p) { return p.proj_num === targetNum; }) || this.mockProjects[0];

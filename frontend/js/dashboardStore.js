@@ -15,10 +15,14 @@
     this.activeTab = "SUMMARY";
     // 當前選中下鑽之專案編號
     this.selectedProjNum = 2127;
-    // 篩選條件
+    // 首頁是否已展開詳細分析 (依使用者需求：首頁預設只極速載入長條圖，點擊色塊才展開詳細明細)
+    this.isDetailExpanded = false;
+    // 點擊色塊所選中展開之執行團隊代碼 (null 或 "ALL", "TPS", "ICS" 等)
+    this.selectedTeamForDrill = null;
+    // 篩選條件 (預設 state: Active, cn_project_type 複選預設: 1.Standard,2.Professional)
     this.filters = {
-      state: "ALL",
-      project_type: "ALL",
+      state: "Active",
+      project_type: "1.Standard,2.Professional",
       territory: "ALL",
       team_id: "ALL",
       pm_id: "ALL",
@@ -26,6 +30,7 @@
       keyword: ""
     };
     // 最新載入之統計資料快取
+    this.teamSummaryData = null;
     this.summaryData = null;
     this.projectDetailData = null;
     this.assigneeWorkloadData = null;
@@ -56,11 +61,13 @@
     await this.refreshActiveView();
   };
 
-  // 重置所有篩選條件
+  // 重置所有篩選條件至標準預設
   DashboardStateStore.prototype.resetFilters = async function () {
+    this.isDetailExpanded = false;
+    this.selectedTeamForDrill = null;
     this.filters = {
-      state: "ALL",
-      project_type: "ALL",
+      state: "Active",
+      project_type: "1.Standard,2.Professional",
       territory: "ALL",
       team_id: "ALL",
       pm_id: "ALL",
@@ -68,6 +75,20 @@
       keyword: ""
     };
     await this.refreshActiveView();
+  };
+
+  // 點擊團隊長條圖色塊以展開該團隊之多專案進度詳細明細 (或切換已展開之團隊)
+  DashboardStateStore.prototype.expandTeamDetail = async function (teamId = "ALL") {
+    this.isDetailExpanded = true;
+    this.selectedTeamForDrill = teamId;
+    this.filters.team_id = teamId;
+    await this.refreshActiveView();
+  };
+
+  // 收合詳細分析區域
+  DashboardStateStore.prototype.collapseDetail = function () {
+    this.isDetailExpanded = false;
+    this.notify();
   };
 
   // 切換主導航分頁
@@ -83,9 +104,24 @@
   DashboardStateStore.prototype.refreshActiveView = async function () {
     if (!this.apiClient) return;
 
-    this.summaryData = await this.apiClient.request("/api/v1/dashboard/summary", this.filters);
+    if (this.activeTab === "SUMMARY") {
+      // 1. 極速取得執行團隊 Active 專案統計長條圖資料
+      this.teamSummaryData = await this.apiClient.request("/api/v1/dashboard/team-summary", {
+        state: this.filters.state,
+        project_type: this.filters.project_type,
+        territory: this.filters.territory,
+        keyword: this.filters.keyword
+      });
 
-    if (this.activeTab === "PROJECT_DETAIL") {
+      // 2. 若使用者已點選色塊展開詳細分析，才載入計算耗時的全域/團隊明細分析
+      if (this.isDetailExpanded) {
+        var queryParams = Object.assign({}, this.filters);
+        if (this.selectedTeamForDrill && this.selectedTeamForDrill !== "ALL") {
+          queryParams.team_id = this.selectedTeamForDrill;
+        }
+        this.summaryData = await this.apiClient.request("/api/v1/dashboard/summary", queryParams);
+      }
+    } else if (this.activeTab === "PROJECT_DETAIL") {
       this.projectDetailData = await this.apiClient.request("/api/v1/dashboard/project", {
         proj_num: this.selectedProjNum
       });

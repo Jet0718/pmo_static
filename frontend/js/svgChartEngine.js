@@ -183,9 +183,76 @@
     return html;
   }
 
+  // 渲染執行團隊 (team_id) 啟動中 (Active) 專案數量長條統計圖 (首頁極速展示專用)
+  function renderTeamActiveProjectsBarChart(teamSummary = {}, selectedTeamId = null) {
+    var teams = (teamSummary && teamSummary.teams) || [];
+    var totalActive = Number((teamSummary && teamSummary.total_active_projects) || 0);
+    if (!teams || teams.length === 0) {
+      return '<div style="padding:20px;text-align:center;color:#64748b;">暫無執行團隊統計數據</div>';
+    }
+
+    var maxCount = 1;
+    teams.forEach(function (t) {
+      var c = Number(t.active_count || 0);
+      if (c > maxCount) maxCount = c;
+    });
+
+    var chartH = 140;
+    var barW = 48;
+    var gap = 24;
+    var startX = 30;
+    var totalW = startX * 2 + teams.length * (barW + gap) - gap;
+
+    var barsSvg = "";
+    teams.forEach(function (t, idx) {
+      var count = Number(t.active_count || 0);
+      var barH = maxCount > 0 ? Math.round((count / maxCount) * (chartH - 45)) : 0;
+      if (count > 0 && barH < 8) barH = 8;
+      var x = startX + idx * (barW + gap);
+      var y = chartH - 26 - barH;
+      var isSel = selectedTeamId && selectedTeamId.toUpperCase() === String(t.team_id).toUpperCase();
+      var color = t.color || "#2563eb";
+      var strokeAttr = isSel ? 'stroke="#0f172a" stroke-width="3"' : 'stroke="none"';
+
+      barsSvg +=
+        '<g class="team-bar-group" data-team-id="' + escapeHtml(t.team_id) + '" style="cursor:pointer;">' +
+          // 柱頂數值標籤
+          '<text x="' + (x + barW / 2) + '" y="' + (y - 6) + '" text-anchor="middle" font-size="13" font-weight="700" fill="' + (isSel ? '#0f172a' : color) + '">' +
+            count +
+          '</text>' +
+          // 長條柱色塊 (帶有 class js-team-bar-item 與 data-team-id 供點擊互動展開)
+          '<rect class="team-bar-item js-team-bar-item' + (isSel ? ' selected' : '') + '" ' +
+            'x="' + x + '" y="' + y + '" width="' + barW + '" height="' + Math.max(4, barH) + '" rx="6" ' +
+            'fill="' + escapeHtml(color) + '" ' + strokeAttr + ' data-team-id="' + escapeHtml(t.team_id) + '" ' +
+            'style="transition:all 0.2s ease;filter:' + (isSel ? 'brightness(1.1) drop-shadow(0 4px 6px rgba(0,0,0,0.15))' : 'none') + ';">' +
+            '<title>' + escapeHtml(t.team_name) + ': ' + count + ' 案啟動中 (點擊展開明細)' + '</title>' +
+          '</rect>' +
+          // 底部團隊代碼標籤
+          '<text x="' + (x + barW / 2) + '" y="' + (chartH - 8) + '" text-anchor="middle" font-size="12" font-weight="700" fill="' + (isSel ? '#2563eb' : '#475569') + '">' +
+            escapeHtml(t.team_id) +
+          '</text>' +
+        '</g>';
+    });
+
+    return (
+      '<div class="team-active-barchart-container" style="display:flex;flex-direction:column;align-items:center;padding:10px 0;">' +
+        '<div style="width:100%;max-width:' + Math.max(500, totalW) + 'px;overflow-x:auto;">' +
+          '<svg width="' + Math.max(500, totalW) + '" height="' + chartH + '" viewBox="0 0 ' + Math.max(500, totalW) + ' ' + chartH + '" style="display:block;margin:0 auto;">' +
+            '<line x1="16" y1="' + (chartH - 26) + '" x2="' + (Math.max(500, totalW) - 16) + '" y2="' + (chartH - 26) + '" stroke="#e2e8f0" stroke-width="1.5" />' +
+            barsSvg +
+          '</svg>' +
+        '</div>' +
+        '<div style="margin-top:8px;font-size:12px;color:#64748b;display:flex;align-items:center;gap:6px;justify-content:center;">' +
+          '<span>💡 提示：點擊上方團隊長條色塊，可直接向下展開該團隊執行專案之健康度與 Ph 1~12 明細列表</span>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
   var exported = {
     escapeHtml: escapeHtml,
     renderRagDonutSvg: renderRagDonutSvg,
+    renderTeamActiveProjectsBarChart: renderTeamActiveProjectsBarChart,
     renderGroupComparisonHtml: renderGroupComparisonHtml,
     renderWbsStageDeviationChart: renderWbsStageDeviationChart,
     renderAssigneeStackedChart: renderAssigneeStackedChart

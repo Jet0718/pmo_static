@@ -15,8 +15,13 @@
   - 採用 **RESTful Controller 路由架構**（對齊 `pmomonthly` 之 `/api/v1/dashboard/*` 端點語意），同時支援：
     1. **Aras OData RESTful API**：`POST /server/odata/method.PMO_ProjectAnalytics_API`（支援 Bearer Token / OAuth 2.0）。
     2. **Aras IOM Client API**：`top.aras.applyMethod("PMO_ProjectAnalytics_API", "<aml/>")`（在 Aras TOC 內免二次登入直接存取）。
+  - **極速分層響應架構 (Fast Overview & Progressive Drill-down)**：
+    首頁載入時提供極速輕量端點 `/api/v1/dashboard/team-summary`，僅檢索 Project 主檔並聚合團隊專案數，完全繞過龐大的 WBS 與 Activity2 關聯運算，將首頁渲染時間降至毫秒級。
 - **客戶端 (Frontend)**：掛載於 Aras TOC (Table of Contents `Portfolio` / `Dashboards` 類別) 的 **獨立全域多專案儀表板 (`PMO_ProgressDashboard.html`)**。
   - 採用遵循 S.O.L.I.D 原則之原生模組化 JavaScript + 響應式現代深淺雙模 UI 與原生 SVG/Canvas 互動圖表引擎（零外部網路依賴，確保內網與 iframe 嵌入 100% 穩定執行）。
+  - 首頁優先載入「各執行團隊 (team_id) 啟動中 (Active) 專案數量長條統計圖」，點擊長條圖各團隊色塊即漸進展開該團隊之多專案進度詳細分析。
+  - 專案類型 (`cn_project_type`) 支援複選 (OR 比對)，預設選中 `1.Standard` 與 `2.Professional`；專案狀態 (`state`) 預設為 `Active`；執行團隊選項清單包含 `TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`。
+  - 總覽表取消獨立下鑽操作欄位，將下鑽連結整合至第一欄專案編號。
 
 ### 1.2 架構圖
 ```mermaid
@@ -319,22 +324,30 @@ sequenceDiagram
     participant DB as Aras SQL Server (BWCS-CRM)
 
     User->>TOC: 開啟 TOC「PMO 專案進度分析儀表板」
-    TOC->>Method: 呼叫 route="/api/v1/dashboard/summary" (state="Active")
-    Method->>DB: 查詢 Project (含 cn_*, bcs_*, Ph1~12, owned_by_id, team_id)
-    Method->>DB: 批次查詢 Root WBS Element 與 Activity2 狀態統計
-    DB-->>Method: 回傳資料集
-    Method->>Method: 計算各專案實際完成率、cn_plan_compl 落差、SPI/CPI 與紅黃綠燈
-    Method-->>TOC: 回傳 JSON (summary, rag_status, team_performance, pm_performance, projects)
-    TOC-->>User: 渲染 KPI 卡片、RAG 圓餅圖、Team/PM 比較圖與 Ph1~12 專案列表
+    Note over TOC,DB: 【極速首頁 Fast Overview】僅查詢 Project 主檔，完全不讀取 WBS 與 Activity2
+    TOC->>Method: 呼叫 route="/api/v1/dashboard/team-summary" (state="Active", project_type="1.Standard,2.Professional")
+    Method->>DB: 快速統計各執行團隊 (team_id: TPS, ICS, PMO, SUS, SHS, Other) 啟動中專案數量
+    DB-->>Method: 回傳團隊專案計數結果
+    Method-->>TOC: 回傳 team-summary JSON (teams, total_active_projects)
+    TOC-->>User: 極速渲染「各執行團隊 Active 專案數量長條統計圖」與首頁概況
 
-    User->>TOC: 點擊特定專案 (如 proj_num=2127) 下鑽分析
+    User->>TOC: 點擊統計圖上的團隊色塊 (例如 TPS 色塊)
+    Note over TOC,DB: 【漸進式展開 Progressive Drill-down】針對選定團隊展開詳細分析
+    TOC->>Method: 呼叫 route="/api/v1/dashboard/summary" (team_id="TPS", state="Active", project_type="1.Standard,2.Professional")
+    Method->>DB: 查詢該團隊之 Project (含 cn_*, bcs_*, Ph1~12) 及對應 WBS / Activity2
+    DB-->>Method: 回傳資料集
+    Method->>Method: 計算各專案完成率、cn_plan_compl 落差、SPI/CPI 與紅黃綠燈
+    Method-->>TOC: 回傳 summary JSON (rag_status, team_performance, projects)
+    TOC-->>User: 向下展開該團隊健康度分佈與多專案總覽表 (第一欄專案編號具備下鑽連結)
+
+    User->>TOC: 點擊總覽表第一欄專案編號 (如 proj_num=2127) 下鑽分析
     TOC->>Method: 呼叫 route="/api/v1/dashboard/project" (proj_num="2127")
-    Method->>DB: 查詢 Sub WBS 關聯樹、WBS Element、WBS Activity2、Activity2 與 Assignment
+    Method->>DB: 查詢 Sub WBS 關聯樹、WBS Element、Activity2 與 Assignment
     DB-->>Method: 回傳階段、里程碑與任務指派明細
     Method->>Method: WbsStageAnalyzer 計算各階段達成率與時程偏差天數
     Method->>Method: WorkloadAggregator 統計每位成員任務狀態與工時負荷
     Method-->>TOC: 回傳 JSON (project, phases_1_12, wbs_stages, milestones, assignees)
-    TOC-->>User: 渲染 Ph1~12 燈號軸、WBS 階段進度與偏差圖、成員任務負荷圖
+    TOC-->>User: 切換至第二頁籤渲染 Ph1~12 燈號軸、WBS 階段偏差圖、成員任務負荷圖
 ```
 
 ---
@@ -556,7 +569,8 @@ classDiagram
 
 | RESTful 路徑 (`route`) | 對應 Action 別名 | 查詢參數 | 回應內容摘要 |
 | :--- | :--- | :--- | :--- |
-| `GET /api/v1/dashboard/summary` | `GET_PORTFOLIO_SUMMARY` | `state` (`Active`/`closed`/`pending`/`All`), `project_type`, `territory`, `team_id`, `pm_id`, `health_status`, `keyword` | 全公司/多專案 KPI 彙總、紅黃綠燈 (`rag_status`) 統計、EVM 彙總、`team_performance`、`pm_performance`、含 `Ph 1~12` 與進度狀態之專案清單 |
+| `GET /api/v1/dashboard/team-summary` | `GET_TEAM_SUMMARY` | `state` (預設 `Active`), `project_type` (預設 `1.Standard,2.Professional`), `territory`, `keyword` | **首頁極速統計**：僅查詢 Project 主檔並依 `team_id` (`TPS`, `ICS`, `PMO`, `SUS`, `SHS`, `Other`) 分組彙整啟動中專案數，完全不讀取 WBS 與任務，數十毫秒秒開首頁長條圖 |
+| `GET /api/v1/dashboard/summary` | `GET_PORTFOLIO_SUMMARY` | `state` (預設 `Active`), `project_type` (複選 OR), `territory`, `team_id`, `pm_id`, `health_status`, `keyword` | 全公司/多專案 KPI 彙總、紅黃綠燈 (`rag_status`) 統計、EVM 彙總、`team_performance`、`pm_performance`、含 `Ph 1~12` 與進度狀態之專案清單 |
 | `GET /api/v1/dashboard/team/{team_id}` | `GET_TEAM_ANALYSIS` | `team_id`, `state` | 指定執行團隊 (`team_id`) 之專案進度、RAG 燈號分佈、PM 績效與風險專案明細 |
 | `GET /api/v1/dashboard/pm/{pm_id}` | `GET_PM_ANALYSIS` | `pm_id`, `state` | 指定專案經理 (`owned_by_id`) 負責之所有專案完成率、時程偏差、EVM 與狀態統計 |
 | `GET /api/v1/dashboard/project/{proj_num}` | `GET_PROJECT_DETAIL` | `proj_num` (專案編號或 ID) | 單一專案深度分析：基本與客製屬性 (`cn_*`/`bcs_*`)、`Ph 1~12` 階段燈號、主階段 `WBS Element` 達成率與時程偏差天數、里程碑進度、該專案成員任務負荷統計 |

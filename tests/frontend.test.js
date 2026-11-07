@@ -31,10 +31,9 @@ test("1. normalizeStatusColor 應正確將 Hex 色碼轉譯為 GREEN / YELLOW / 
 test("2. buildSummaryFromProjects 應正確計算多專案 KPI、RAG 分佈與團隊/PM 比較數據", () => {
   const resAll = PMOApi.buildSummaryFromProjects(PMOApi.DEFAULT_MOCK_PROJECTS, { state: "ALL" });
   assert.equal(resAll.status, "success");
-  assert.equal(resAll.summary.total_projects, 4);
-  assert.equal(resAll.summary.active_projects, 3);
-  assert.equal(resAll.summary.closed_projects, 1);
-  assert.equal(resAll.rag_status.green_count, 2);
+  assert.equal(resAll.summary.total_projects, 6);
+  assert.equal(resAll.summary.active_projects, 6);
+  assert.equal(resAll.rag_status.green_count, 4);
   assert.equal(resAll.rag_status.amber_count, 1);
   assert.equal(resAll.rag_status.red_count, 1);
 
@@ -45,8 +44,16 @@ test("2. buildSummaryFromProjects 應正確計算多專案 KPI、RAG 分佈與�
 
   // 測試服務中心篩選
   const resHsinchu = PMOApi.buildSummaryFromProjects(PMOApi.DEFAULT_MOCK_PROJECTS, { territory: "新竹服務中心" });
-  assert.equal(resHsinchu.summary.total_projects, 1);
-  assert.equal(resHsinchu.projects[0].proj_num, 2135);
+  assert.equal(resHsinchu.summary.total_projects, 2);
+
+  // 測試專案類型複選 (OR)
+  const resMultiType = PMOApi.buildSummaryFromProjects(PMOApi.DEFAULT_MOCK_PROJECTS, { project_type: "1.Standard,2.Professional" });
+  assert.equal(resMultiType.summary.total_projects, 6);
+
+  // 測試執行團隊篩選 (TPS)
+  const resTps = PMOApi.buildSummaryFromProjects(PMOApi.DEFAULT_MOCK_PROJECTS, { team_id: "TPS" });
+  assert.equal(resTps.summary.total_projects, 1);
+  assert.equal(resTps.projects[0].proj_num, 2127);
 });
 
 test("3. aggregateCrossProjectAssignees 應正確統計跨專案成員任務負荷與逾期排序", () => {
@@ -87,19 +94,41 @@ test("5. DashboardStateStore 與 SVG 圖表/視圖渲染器應輸出零 NaN 且�
   const client = new PMOApi.ArasApiClient();
   const store = new PMOStore.DashboardStateStore(client);
 
+  // 1. 首頁預設高速概覽模式
   await store.refreshActiveView();
-  const summaryHtml = PMODashboardApp.renderPortfolioSummaryView(store.summaryData);
-  assert.ok(summaryHtml.includes("次世代 BDM 智慧製造整合專案"));
-  assert.ok(!summaryHtml.includes("NaN"));
-  assert.ok(!summaryHtml.includes("[object Object]"));
+  assert.equal(store.isDetailExpanded, false);
+  assert.ok(store.teamSummaryData);
+  assert.equal(store.teamSummaryData.teams.length, 6);
 
+  const fastOverviewHtml = PMODashboardApp.renderPortfolioSummaryView(store.summaryData, store);
+  assert.ok(fastOverviewHtml.includes("各執行團隊啟動中 (Active) 專案數量統計"));
+  assert.ok(fastOverviewHtml.includes("data-team-id=\"TPS\""));
+  assert.ok(fastOverviewHtml.includes("data-team-id=\"ICS\""));
+  assert.ok(!fastOverviewHtml.includes("NaN"));
+
+  // 2. 點擊團隊色塊展開明細分析 (需求 1 & 需求 5)
+  await store.expandTeamDetail("TPS");
+  assert.equal(store.isDetailExpanded, true);
+  assert.equal(store.selectedTeamForDrill, "TPS");
+
+  const expandedHtml = PMODashboardApp.renderPortfolioSummaryView(store.summaryData, store);
+  assert.ok(expandedHtml.includes("次世代 BDM 智慧製造整合專案"));
+  // 驗證需求 5：取消下鑽操作欄位，併入第一欄專案編號超連結
+  assert.ok(expandedHtml.includes("class=\"pmo-proj-link js-drill-project\" data-proj-num=\"2127\""));
+  assert.ok(!expandedHtml.includes("<th>下鑽操作</th>"));
+  assert.ok(!expandedHtml.includes("階段與成員分析 &rarr;"));
+  assert.ok(!expandedHtml.includes("NaN"));
+  assert.ok(!expandedHtml.includes("[object Object]"));
+
+  // 3. 單一專案階段分析
   await store.setActiveTab("PROJECT_DETAIL", 2135);
-  const detailHtml = PMODashboardApp.renderProjectDetailView(store.projectDetailData, store.summaryData.projects);
+  const detailHtml = PMODashboardApp.renderProjectDetailView(store.projectDetailData, store.summaryData ? store.summaryData.projects : []);
   assert.ok(detailHtml.includes("車用電子研發 BOM 與變更簽核導入案"));
   assert.ok(detailHtml.includes("Phase 2: EBOM/MBOM 自動拋轉介面開發"));
   assert.ok(detailHtml.includes("+6 天延遲"));
   assert.ok(!detailHtml.includes("NaN"));
 
+  // 4. 成員任務負荷分析
   await store.setActiveTab("ASSIGNEES");
   const assigneeHtml = PMODashboardApp.renderAssigneeWorkloadView(store.assigneeWorkloadData);
   assert.ok(assigneeHtml.includes("張家豪 (全端工程師)"));

@@ -38,14 +38,75 @@
   }
 
   // 渲染全域多專案總覽頁籤 (SUMMARY)
-  function renderPortfolioSummaryView(data = null) {
-    if (!data || !data.summary) {
-      return '<div class="pmo-card">載入統計資料中...</div>';
+  function renderPortfolioSummaryView(data = null, store = null) {
+    // 取得極速團隊長條統計資料 (優先取 store.teamSummaryData，次取 data.team_summary 或本地聚合)
+    var teamSummary = (store && store.teamSummaryData) || (data && data.team_summary) || null;
+    var selectedTeamId = (store && store.selectedTeamForDrill) || (store && store.filters && store.filters.team_id !== "ALL" ? store.filters.team_id : null);
+    var isExpanded = store ? Boolean(store.isDetailExpanded) : Boolean(data && data.summary);
+
+    // 1. 首頁極速展示卡片：執行團隊 (team_id) Active 專案數量長條統計圖
+    var barChartHtml = "";
+    if (teamSummary && typeof PMOCharts.renderTeamActiveProjectsBarChart === "function") {
+      barChartHtml =
+        '<div class="pmo-card" style="margin-bottom:16px;">' +
+          '<div class="pmo-card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+            '<div>' +
+              '<h3 style="margin:0;display:flex;align-items:center;gap:8px;">' +
+                '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#2563eb;"></span>' +
+                '各執行團隊啟動中 (Active) 專案數量統計' +
+              '</h3>' +
+              '<p style="margin:4px 0 0 0;font-size:12px;color:#64748b;">' +
+                '涵蓋 TPS、ICS、PMO、SUS、SHS 與 Other 等團隊 | 點擊長條柱色塊可直接向下展開明細' +
+              '</p>' +
+            '</div>' +
+            '<div style="font-size:13px;font-weight:700;color:#2563eb;background:#eff6ff;padding:4px 12px;border-radius:20px;">' +
+              '啟動中專案總計: ' + Number(teamSummary.total_active_projects || 0) + ' 案' +
+            '</div>' +
+          '</div>' +
+          PMOCharts.renderTeamActiveProjectsBarChart(teamSummary, selectedTeamId) +
+        '</div>';
     }
+
+    // 2. 若使用者尚未點擊色塊展開明細，顯示高速引導卡片
+    if (!isExpanded) {
+      var guideHtml =
+        '<div class="pmo-card" style="text-align:center;padding:36px 20px;background:#f8fafc;border:2px dashed #cbd5e1;border-radius:12px;">' +
+          '<div style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:8px;">' +
+            '🚀 首頁高速概覽已就緒' +
+          '</div>' +
+          '<p style="color:#64748b;font-size:14px;max-width:620px;margin:0 auto 16px auto;line-height:1.6;">' +
+            '系統已先以最快速度載入執行團隊啟動中專案統計。請<strong>點擊上方長條圖的任一團隊色塊 (如 TPS, ICS, PMO, SUS, SHS, Other)</strong>，或點選下方按鈕展開詳細多專案進度與 Ph 1~12 階段分析。' +
+          '</p>' +
+          '<button type="button" class="btn-action js-expand-all-teams" style="background:#2563eb;color:#fff;padding:9px 24px;border-radius:6px;font-weight:600;border:none;cursor:pointer;font-size:13px;">' +
+            '展開全部專案進度明細 &darr;' +
+          '</button>' +
+        '</div>';
+      return barChartHtml + guideHtml;
+    }
+
+    if (!data || !data.summary) {
+      return barChartHtml + '<div class="pmo-card">載入詳細統計資料中...</div>';
+    }
+
     var s = data.summary;
     var rag = data.rag_status || {};
     var evm = data.evm_summary || {};
     var projects = data.projects || [];
+
+    var currentScopeText = selectedTeamId && selectedTeamId !== "ALL"
+      ? "【" + escapeHtml(selectedTeamId) + " 執行團隊】專案詳細進度與健康度分析"
+      : "【全域團隊】多專案進度與健康度詳細分析";
+
+    var expandToolbarHtml =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">' +
+        '<div style="font-size:15px;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:8px;">' +
+          '<span style="width:8px;height:8px;border-radius:50%;background:#10b981;display:inline-block;"></span>' +
+          currentScopeText +
+        '</div>' +
+        '<button type="button" class="btn-action js-collapse-detail" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;padding:5px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">' +
+          '收合詳細分析 &uarr;' +
+        '</button>' +
+      '</div>';
 
     var kpiHtml =
       '<div class="kpi-grid">' +
@@ -100,9 +161,15 @@
       var spiColor = p.spi >= 0.95 ? "#10b981" : (p.spi >= 0.8 ? "#f59e0b" : "#ef4444");
       var cpiColor = p.cpi >= 0.95 ? "#10b981" : (p.cpi >= 0.8 ? "#f59e0b" : "#ef4444");
 
+      // 需求 5：取消獨立下鑽操作欄位，將該欄原本的連結併在專案編號欄中
       rowsHtml +=
         '<tr data-proj-num="' + p.proj_num + '">' +
-          '<td><strong>' + p.proj_num + '</strong><br/><small style="color:#64748b;">' + escapeHtml(p.project_type) + '</small></td>' +
+          '<td>' +
+            '<a href="javascript:void(0);" class="pmo-proj-link js-drill-project" data-proj-num="' + p.proj_num + '" title="點擊下鑽查看專案 ' + p.proj_num + ' 階段達成率與成員任務負荷分析">' +
+              p.proj_num +
+            '</a>' +
+            '<br/><small style="color:#64748b;">' + escapeHtml(p.project_type) + '</small>' +
+          '</td>' +
           '<td>' +
             '<div style="font-weight:700;color:#0f172a;">' + escapeHtml(p.project_name) + '</div>' +
             '<div style="font-size:12px;color:#64748b;">客戶: ' + escapeHtml(p.customer_name || "-") + ' | 服務中心: ' + escapeHtml(p.territory || "-") + '</div>' +
@@ -125,14 +192,11 @@
             '<div>完成 ' + p.completed_tasks + ' / 總數 ' + p.total_tasks + '</div>' +
             '<div style="font-size:11px;color:' + (p.overdue_tasks > 0 ? "#ef4444;font-weight:700;" : "#64748b;") + '">逾期: ' + p.overdue_tasks + ' 項 | 延遲: ' + p.delay_days + ' 天</div>' +
           '</td>' +
-          '<td>' +
-            '<button type="button" class="btn-link js-drill-project" data-proj-num="' + p.proj_num + '">階段與成員分析 &rarr;</button>' +
-          '</td>' +
         '</tr>';
     });
 
     if (!rowsHtml) {
-      rowsHtml = '<tr><td colspan="9" style="text-align:center;padding:28px;color:#64748b;">無符合篩選條件的專案資料</td></tr>';
+      rowsHtml = '<tr><td colspan="8" style="text-align:center;padding:28px;color:#64748b;">無符合篩選條件的專案資料</td></tr>';
     }
 
     var tableHtml =
@@ -144,7 +208,7 @@
           '<table class="pmo-table" id="portfolio-projects-table">' +
             '<thead>' +
               '<tr>' +
-                '<th>專案編號/類型</th>' +
+                '<th>專案編號 / 類型</th>' +
                 '<th>專案名稱 / 客戶 / 服務中心</th>' +
                 '<th>專案經理 / 團隊</th>' +
                 '<th>健康度燈號</th>' +
@@ -152,7 +216,6 @@
                 '<th>Ph 1 ~ Ph 12 階段狀態色塊</th>' +
                 '<th>SPI / CPI (SV / CV)</th>' +
                 '<th>工作任務狀態與延遲天數</th>' +
-                '<th>下鑽操作</th>' +
               '</tr>' +
             '</thead>' +
             '<tbody>' + rowsHtml + '</tbody>' +
@@ -160,7 +223,7 @@
         '</div>' +
       '</div>';
 
-    return kpiHtml + chartsHtml + tableHtml;
+    return barChartHtml + expandToolbarHtml + kpiHtml + chartsHtml + tableHtml;
   }
 
   // 渲染單一專案下鑽頁籤：各階段 (Ph 1~12 & WBS Element) 進度達成率與時程偏差 + 專案成員負荷 (PROJECT_DETAIL)
@@ -421,7 +484,7 @@
       } else if (currentStore.activeTab === "ASSIGNEES") {
         viewContainer.innerHTML = renderAssigneeWorkloadView(currentStore.assigneeWorkloadData);
       } else {
-        viewContainer.innerHTML = renderPortfolioSummaryView(currentStore.summaryData);
+        viewContainer.innerHTML = renderPortfolioSummaryView(currentStore.summaryData, currentStore);
       }
     }
 
@@ -443,7 +506,6 @@
     // 綁定篩選器變更事件
     var filterIds = [
       { id: "filter-state", key: "state" },
-      { id: "filter-type", key: "project_type" },
       { id: "filter-territory", key: "territory" },
       { id: "filter-team", key: "team_id" },
       { id: "filter-health", key: "health_status" }
@@ -459,6 +521,24 @@
       }
     });
 
+    // 需求 2：專案類型 (cn_project_type) 複選 Checkbox 監聽
+    var typeCheckboxes = doc.querySelectorAll(".js-filter-type");
+    var hiddenTypeInput = doc.getElementById("filter-type");
+    function handleTypeCheckboxChange() {
+      var selected = [];
+      for (var i = 0; i < typeCheckboxes.length; i++) {
+        if (typeCheckboxes[i].checked) {
+          selected.push(typeCheckboxes[i].value);
+        }
+      }
+      var typeVal = selected.join(",");
+      if (hiddenTypeInput) hiddenTypeInput.value = typeVal;
+      store.updateFilters({ project_type: typeVal || "NONE" });
+    }
+    for (var tc = 0; tc < typeCheckboxes.length; tc++) {
+      typeCheckboxes[tc].addEventListener("change", handleTypeCheckboxChange);
+    }
+
     var kwInput = doc.getElementById("filter-keyword");
     if (kwInput) {
       kwInput.addEventListener("input", function () {
@@ -469,18 +549,56 @@
     var btnReset = doc.getElementById("btn-reset-filters");
     if (btnReset) {
       btnReset.addEventListener("click", function () {
-        filterIds.forEach(function (f) {
-          var el = doc.getElementById(f.id);
-          if (el) el.value = "ALL";
-        });
+        var elState = doc.getElementById("filter-state");
+        if (elState) elState.value = "Active";
+
+        for (var i = 0; i < typeCheckboxes.length; i++) {
+          typeCheckboxes[i].checked = true;
+        }
+        if (hiddenTypeInput) hiddenTypeInput.value = "1.Standard,2.Professional";
+
+        var elTerr = doc.getElementById("filter-territory");
+        if (elTerr) elTerr.value = "ALL";
+        var elTeam = doc.getElementById("filter-team");
+        if (elTeam) elTeam.value = "ALL";
+        var elHealth = doc.getElementById("filter-health");
+        if (elHealth) elHealth.value = "ALL";
+
         if (kwInput) kwInput.value = "";
         store.resetFilters();
       });
     }
 
-    // 綁定內容區域委派事件 (下鑽單一專案、切換專案、返回總覽)
+    // 綁定內容區域委派事件 (下鑽單一專案、點擊長條圖色塊展開明細、展開全部、收合詳細分析)
     if (viewContainer) {
       viewContainer.addEventListener("click", function (ev) {
+        // 1. 點擊長條圖色塊或團隊群組展開該團隊明細 (需求 1 & 使用者指定)
+        var teamBar = ev.target.closest(".js-team-bar-item") || ev.target.closest(".team-bar-group");
+        if (teamBar) {
+          var teamId = teamBar.getAttribute("data-team-id") || "ALL";
+          var elTeam = doc.getElementById("filter-team");
+          if (elTeam) elTeam.value = teamId;
+          store.expandTeamDetail(teamId);
+          return;
+        }
+
+        // 2. 點擊展開全部團隊專案明細按鈕
+        var expandAllBtn = ev.target.closest(".js-expand-all-teams");
+        if (expandAllBtn) {
+          var elTeamAll = doc.getElementById("filter-team");
+          if (elTeamAll) elTeamAll.value = "ALL";
+          store.expandTeamDetail("ALL");
+          return;
+        }
+
+        // 3. 點擊收合詳細分析按鈕
+        var collapseBtn = ev.target.closest(".js-collapse-detail");
+        if (collapseBtn) {
+          store.collapseDetail();
+          return;
+        }
+
+        // 4. 點擊專案編號 (或下鑽連結) 切換至單一專案下鑽視圖 (需求 5)
         var drillBtn = ev.target.closest(".js-drill-project");
         if (drillBtn) {
           var projNum = Number(drillBtn.getAttribute("data-proj-num") || 0);

@@ -8,10 +8,14 @@
 
 ## 1. 核心統計與分析功能
 
-1. **全域多專案健康度總覽 (`/api/v1/dashboard/summary`)**
-   - 即時彙算所有專案之**整體實際完成率 (`rollup_percent_compl`)**、**計劃進度基準 (`cn_plan_compl`)**、**延遲天數 (`cn_delay_days`)**、**EVM 績效 (`cn_spi` / `cn_cpi` / `cn_sv` / `cn_cv`)** 與**健康度燈號 (綠燈正常 / 黃燈警示 / 紅燈嚴重延遲)**。
-   - 支援依專案狀態 (`Active`/`closed`/`pending`)、專案類型 (`1.Standard`/`2.Professional`)、服務中心 (`territory`)、執行團隊 (`team_id`)、專案經理 (`owned_by_id`) 與健康度燈號篩選。
-   - 內建各執行團隊 (`Team`) 與各專案經理 (`PM`) 之進度達成率與 SPI/CPI 橫向比較圖表。
+1. **全域多專案健康度總覽與極速概覽 (`/api/v1/dashboard/summary` & `/api/v1/dashboard/team-summary`)**
+   - **首頁極速加載**：首頁載入時優先呼叫極速輕量端點 `/api/v1/dashboard/team-summary`，僅檢索 Project 主檔並統計「各執行團隊 (`team_id`) 啟動中 (`Active`) 專案數量長條圖」，完全不載入 WBS 與任務，達到毫秒級極速開屏。
+   - **統計圖色塊互動展開**：點擊長條圖中之各團隊色塊（`TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`）時，向下展開該團隊之健康度燈號分佈、EVM 與多專案進度明細列表。
+   - **進階多維度過濾**：
+     - 專案狀態 (`state`)：預設為 `Active`。
+     - 專案類型 (`cn_project_type`)：支援複選 (OR 比對)，預設選中 `1.Standard` 與 `2.Professional`。
+     - 執行團隊 (`team_id`)：選單支援 `ALL`、`TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`。
+   - **多專案進度明細列表**：取消獨立之「下鑽操作」欄位，直接將下鑽連結整合至第一欄「專案編號」，點擊專案編號即可切換至該專案之階段達成率與成員負荷分析。
 2. **各階段 (`Ph 1~12` & `WBS Element` / `Milestone`) 進度達成率與時程偏差分析 (`/api/v1/dashboard/project/{proj_num}` & `/api/v1/dashboard/wbs/{proj_num}`)**
    - **Ph 1 ~ Ph 12 階段燈號矩陣**：直接讀取並視覺化 `Project` 上的 `percent_compl_1~12` 與 `status_1~12` 顏色狀態（含 Hex 色碼自動轉譯圓點標籤）。
    - **WBS 樹狀階段與時程偏差分析**：透過 `Sub WBS` 與 `WBS Activity2` 遞迴剖析各主階段與里程碑之完成度 (%)、應有進度、時程變異 (`cn_sv`)、**時程偏差天數 (Schedule Variance Days)** 與任務狀態分佈（已完成 / 進行中 / 未開始 / 逾期）。

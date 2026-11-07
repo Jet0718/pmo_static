@@ -23,11 +23,35 @@ public class FakeProjectRepository : IProjectRepository
                 {
                     continue;
                 }
-                if (!string.IsNullOrEmpty(query.TeamId) &&
-                    !string.Equals(query.TeamId, "ALL", System.StringComparison.OrdinalIgnoreCase) &&
-                    p.TeamId != query.TeamId)
+                if (!string.IsNullOrEmpty(query.ProjectTypeFilter) &&
+                    !string.Equals(query.ProjectTypeFilter, "ALL", System.StringComparison.OrdinalIgnoreCase))
                 {
-                    continue;
+                    string[] types = query.ProjectTypeFilter.Split(new char[] { ',' }, System.StringSplitOptions.RemoveEmptyEntries);
+                    bool matchType = false;
+                    for (int t = 0; t < types.Length; t++)
+                    {
+                        if (string.Equals(p.ProjectType, types[t].Trim(), System.StringComparison.OrdinalIgnoreCase))
+                        {
+                            matchType = true;
+                            break;
+                        }
+                    }
+                    if (!matchType) continue;
+                }
+                if (!string.IsNullOrEmpty(query.TeamId) &&
+                    !string.Equals(query.TeamId, "ALL", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    if (string.Equals(query.TeamId, "Other", System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (p.TeamId == "TPS" || p.TeamId == "ICS" || p.TeamId == "PMO" || p.TeamId == "SUS" || p.TeamId == "SHS")
+                        {
+                            continue;
+                        }
+                    }
+                    else if (!string.Equals(p.TeamId, query.TeamId, System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
                 }
                 if (!string.IsNullOrEmpty(query.PmId) &&
                     !string.Equals(query.PmId, "ALL", System.StringComparison.OrdinalIgnoreCase) &&
@@ -340,5 +364,27 @@ public class Program
         string jsonAsgn = ctrl.HandleItemRequest(reqAsgn, today);
         AssertTrue(jsonAsgn.Contains("\"assignees\":") && jsonAsgn.Contains("\"completion_rate\":100"),
             "RESTful 路由測試：/api/v1/dashboard/assignees 回傳成員負荷統計 JSON");
+
+        // 新增：首頁極速執行團隊 Active 專案統計測試 (/api/v1/dashboard/team-summary)
+        Item reqTeamSum = new Item("Method", "PMO_ProjectAnalytics_API");
+        reqTeamSum.setProperty("route", "/api/v1/dashboard/team-summary");
+        reqTeamSum.setProperty("state", "Active");
+        string jsonTeamSum = ctrl.HandleItemRequest(reqTeamSum, today);
+        AssertTrue(jsonTeamSum.Contains("\"total_active_projects\":1") &&
+                   jsonTeamSum.Contains("\"team_id\":\"TPS\"") &&
+                   jsonTeamSum.Contains("\"team_id\":\"ICS\"") &&
+                   jsonTeamSum.Contains("\"team_id\":\"PMO\"") &&
+                   jsonTeamSum.Contains("\"team_id\":\"SUS\"") &&
+                   jsonTeamSum.Contains("\"team_id\":\"SHS\"") &&
+                   jsonTeamSum.Contains("\"team_id\":\"Other\""),
+            "RESTful 路由測試：/api/v1/dashboard/team-summary 回傳六大團隊極速長條統計 JSON");
+
+        // 新增：專案類型複選 (OR) 測試
+        Item reqMultiType = new Item("Method", "PMO_ProjectAnalytics_API");
+        reqMultiType.setProperty("route", "/api/v1/dashboard/team-summary");
+        reqMultiType.setProperty("project_type", "1.Standard,2.Professional");
+        string jsonMultiType = ctrl.HandleItemRequest(reqMultiType, today);
+        AssertTrue(jsonMultiType.Contains("\"total_active_projects\":1"),
+            "專案類型複選測試：1.Standard,2.Professional 應成功匹配 Standard 專案");
     }
 }

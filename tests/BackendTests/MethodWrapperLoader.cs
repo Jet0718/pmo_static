@@ -1,7 +1,7 @@
-﻿public class ArasMethodWrapper : Item
+public class ArasMethodWrapper : Item
 {
     public Item methodCode()
-    {
+{
 // ============================================================================
 // 檔案名稱：PMO_ProjectAnalytics_API.cs
 // 專案名稱：BDM 系統專案進度狀態分析統計模組 (Aras Innovator 12 SP9)
@@ -74,7 +74,7 @@ public class AnalyticsQueryDto
     {
         this.Route = "/api/v1/dashboard/summary";
         this.StateFilter = "Active";
-        this.ProjectTypeFilter = "ALL";
+        this.ProjectTypeFilter = "1.Standard,2.Professional";
         this.TerritoryFilter = "ALL";
         this.TeamId = "ALL";
         this.PmId = "ALL";
@@ -1538,7 +1538,21 @@ public class ArasProjectRepository : IProjectRepository
             if (!string.IsNullOrEmpty(query.ProjectTypeFilter) &&
                 !string.Equals(query.ProjectTypeFilter, "ALL", System.StringComparison.OrdinalIgnoreCase))
             {
-                qry.setProperty("cn_project_type", SanitizeInput(query.ProjectTypeFilter));
+                string[] typeParts = query.ProjectTypeFilter.Split(new char[] { ',' }, System.StringSplitOptions.RemoveEmptyEntries);
+                if (typeParts.Length == 1)
+                {
+                    qry.setProperty("cn_project_type", SanitizeInput(typeParts[0]));
+                }
+                else if (typeParts.Length > 1)
+                {
+                    System.Collections.Generic.List<string> sanitizedTypes = new System.Collections.Generic.List<string>();
+                    for (int t = 0; t < typeParts.Length; t++)
+                    {
+                        sanitizedTypes.Add("'" + SanitizeInput(typeParts[t]) + "'");
+                    }
+                    qry.setProperty("cn_project_type", string.Join(",", sanitizedTypes.ToArray()));
+                    qry.setPropertyAttribute("cn_project_type", "condition", "in");
+                }
             }
             if (!string.IsNullOrEmpty(query.TerritoryFilter) &&
                 !string.Equals(query.TerritoryFilter, "ALL", System.StringComparison.OrdinalIgnoreCase))
@@ -1548,7 +1562,15 @@ public class ArasProjectRepository : IProjectRepository
             if (!string.IsNullOrEmpty(query.TeamId) &&
                 !string.Equals(query.TeamId, "ALL", System.StringComparison.OrdinalIgnoreCase))
             {
-                qry.setProperty("team_id", SanitizeInput(query.TeamId));
+                if (string.Equals(query.TeamId, "Other", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    qry.setProperty("team_id", "'TPS','ICS','PMO','SUS','SHS'");
+                    qry.setPropertyAttribute("team_id", "condition", "not in");
+                }
+                else
+                {
+                    qry.setProperty("team_id", SanitizeInput(query.TeamId));
+                }
             }
             if (!string.IsNullOrEmpty(query.PmId) &&
                 !string.Equals(query.PmId, "ALL", System.StringComparison.OrdinalIgnoreCase))
@@ -2019,7 +2041,7 @@ public class ProjectAnalyticsController
             }
             query.Route = route;
             query.StateFilter = requestItem.getProperty("state", "Active");
-            query.ProjectTypeFilter = requestItem.getProperty("project_type", "ALL");
+            query.ProjectTypeFilter = requestItem.getProperty("project_type", "1.Standard,2.Professional");
             query.TerritoryFilter = requestItem.getProperty("territory", "ALL");
             query.TeamId = requestItem.getProperty("team_id", "ALL");
             query.PmId = requestItem.getProperty("pm_id", "ALL");
@@ -2042,6 +2064,12 @@ public class ProjectAnalyticsController
             route.Equals("HEALTH_CHECK", System.StringComparison.OrdinalIgnoreCase))
         {
             return "{\"status\":\"healthy\",\"version\":\"1.0.0\",\"system\":\"PMO_ProjectAnalytics_API\"}";
+        }
+
+        if (route.StartsWith("/api/v1/dashboard/team-summary", System.StringComparison.OrdinalIgnoreCase) ||
+            route.Equals("GET_TEAM_SUMMARY", System.StringComparison.OrdinalIgnoreCase))
+        {
+            return GetTeamSummaryJson(query, asOfDate);
         }
 
         if (route.StartsWith("/api/v1/dashboard/project", System.StringComparison.OrdinalIgnoreCase) ||
@@ -2076,6 +2104,75 @@ public class ProjectAnalyticsController
 
         // 預設路由：/api/v1/dashboard/summary (GET_PORTFOLIO_SUMMARY)
         return GetPortfolioSummaryJson(query, asOfDate);
+    }
+
+    /// <summary>
+    /// 路由 0：GET /api/v1/dashboard/team-summary — 首頁極速統計各執行團隊 (TPS, ICS, PMO, SUS, SHS, Other) Active 專案數
+    /// 效能保證：僅檢索 Project 主檔，完全不讀取 WBS 與 Activity2
+    /// </summary>
+    public string GetTeamSummaryJson(AnalyticsQueryDto query, System.DateTime asOfDate)
+    {
+        if (query == null) query = new AnalyticsQueryDto();
+        if (string.IsNullOrEmpty(query.StateFilter)) query.StateFilter = "Active";
+
+        System.Collections.Generic.List<ProjectRecord> projects = this._repo.GetProjects(query);
+
+        // 初始化六大團隊計數器 (TPS, ICS, PMO, SUS, SHS, Other)
+        System.Collections.Generic.Dictionary<string, int> teamCounts =
+            new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase)
+            {
+                { "TPS", 0 },
+                { "ICS", 0 },
+                { "PMO", 0 },
+                { "SUS", 0 },
+                { "SHS", 0 },
+                { "Other", 0 }
+            };
+
+        int totalActive = 0;
+        for (int i = 0; i < projects.Count; i++)
+        {
+            ProjectRecord p = projects[i];
+            totalActive++;
+            string tId = (p.TeamId ?? "").Trim();
+            if (teamCounts.ContainsKey(tId))
+            {
+                teamCounts[tId]++;
+            }
+            else
+            {
+                teamCounts["Other"]++;
+            }
+        }
+
+        // 組裝高速回應 JSON
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        sb.Append("{");
+        sb.Append("\"status\":\"success\",");
+        sb.Append("\"route\":\"/api/v1/dashboard/team-summary\",");
+        sb.Append("\"as_of_date\":\"").Append(asOfDate.ToString("yyyy-MM-dd")).Append("\",");
+        sb.Append("\"total_active_projects\":").Append(totalActive).Append(",");
+        sb.Append("\"teams\":[");
+
+        string[] teamKeys = new string[] { "TPS", "ICS", "PMO", "SUS", "SHS", "Other" };
+        string[] teamNames = new string[] { "TPS 顧問團隊", "ICS 顧問團隊", "PMO 專案管理處", "SUS 永續服務處", "SHS 顧問團隊", "其他團隊" };
+        string[] teamColors = new string[] { "#2563eb", "#0ea5e9", "#8b5cf6", "#10b981", "#f59e0b", "#64748b" };
+
+        for (int k = 0; k < teamKeys.Length; k++)
+        {
+            if (k > 0) sb.Append(",");
+            string key = teamKeys[k];
+            sb.Append("{");
+            sb.Append("\"team_id\":\"").Append(key).Append("\",");
+            sb.Append("\"team_name\":\"").Append(teamNames[k]).Append("\",");
+            sb.Append("\"active_count\":").Append(teamCounts[key]).Append(",");
+            sb.Append("\"color\":\"").Append(teamColors[k]).Append("\"");
+            sb.Append("}");
+        }
+        sb.Append("]");
+        sb.Append("}");
+
+        return sb.ToString();
     }
 
     /// <summary>

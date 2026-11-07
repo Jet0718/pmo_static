@@ -454,3 +454,34 @@ body, html {
   max-width: 280px;
   display: none;
 }
+
+/* 專案編號下鑽超連結樣式 (需求 5) */
+.pmo-proj-link {
+  font-weight: 700;
+  color: var(--brand-primary, #2563eb);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 14px;
+  transition: color 0.15s ease-in-out;
+}
+
+.pmo-proj-link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+/* 執行團隊 Active 專案長條圖色塊互動樣式 (需求 1) */
+.team-bar-item {
+  cursor: pointer;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.team-bar-item:hover {
+  filter: brightness(1.15);
+  transform: translateY(-2px);
+}
+
+.team-bar-item.selected {
+  stroke: #0f172a;
+  stroke-width: 2.5px;
+}
