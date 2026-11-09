@@ -20,7 +20,7 @@
 - **客戶端 (Frontend)**：掛載於 Aras TOC (Table of Contents `Portfolio` / `Dashboards` 類別) 的 **獨立全域多專案儀表板 (`PMO_ProgressDashboard.html`)**。
   - 採用遵循 S.O.L.I.D 原則之原生模組化 JavaScript + 響應式現代深淺雙模 UI 與原生 SVG/Canvas 互動圖表引擎（零外部網路依賴，確保內網與 iframe 嵌入 100% 穩定執行）。
   - 首頁優先載入「各執行團隊 (team_id) 專案數量長條統計圖」，長條圖統計結果即時聯動篩選條件（依專案狀態、專案類型、服務中心等動態聚合計算），點擊長條圖各團隊色塊即漸進展開該團隊之多專案進度詳細分析。
-  - 專案類型 (`cn_project_type`) 支援 9 大完整類型複選 (OR 比對：`1.Standard`, `2.Professional`, `3.Upgrade`, `4.Customize`, `5.Product`, `6.Technical`, `7.Marketing`, `8.EmployeeTraining`, `F.Misc`)，預設選中 `1.Standard` 與 `2.Professional`；專案狀態 (`state`) 預設為 `Active`；執行團隊選項清單包含 `TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`（後端支援以 `team_id/@keyed_name` 精確解析真實團隊代碼，避免將 GUID 誤判為 Other）。
+  - 專案類型 (`cn_project_type`) 支援 9 大完整類型複選 (OR 比對：`1.Standard`, `2.Professional`, `3.Upgrade`, `4.Customize`, `5.Product`, `6.Technical`, `7.Marketing`, `8.EmployeeTraining`, `F.Misc`)，預設選中 `1.Standard` 與 `2.Professional`；專案狀態 (`state`) 預設為 `Active`；執行團隊選項清單純淨顯示為 `TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`（嚴禁附加「XX團隊」等冗餘中文後綴；後端支援 Team GUID 快取映射與 `team_id/@keyed_name` 雙重解析，確保準確依團隊計量，杜絕全部歸入 Other）。
   - 總覽表取消獨立下鑽操作欄位，將下鑽連結整合至第一欄專案編號。
 
 ### 1.2 架構圖

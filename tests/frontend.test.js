@@ -109,6 +109,12 @@ test("6. DashboardStateStore 與 SVG 圖表/視圖渲染器應輸出零 NaN 且�
   assert.equal(store.isDetailExpanded, false);
   assert.ok(store.teamSummaryData);
   assert.equal(store.teamSummaryData.teams.length, 6);
+  assert.equal(store.teamSummaryData.teams[0].team_name, "TPS");
+  assert.equal(store.teamSummaryData.teams[1].team_name, "ICS");
+  assert.equal(store.teamSummaryData.teams[2].team_name, "PMO");
+  assert.equal(store.teamSummaryData.teams[3].team_name, "SUS");
+  assert.equal(store.teamSummaryData.teams[4].team_name, "SHS");
+  assert.equal(store.teamSummaryData.teams[5].team_name, "Other");
 
   const fastOverviewHtml = PMODashboardApp.renderPortfolioSummaryView(store.summaryData, store);
   assert.ok(fastOverviewHtml.includes("各執行團隊進行中 (Active) 專案數量統計"));

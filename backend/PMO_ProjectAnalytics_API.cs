@@ -2145,7 +2145,7 @@ public class ProjectAnalyticsController
             ProjectRecord p = projects[i];
             totalProjects++;
             // 透過 NormalizeTeamCode 解析 GUID 或 keyed_name，精確歸類六大團隊
-            string normTeam = ArasProjectRepository.NormalizeTeamCode(p.TeamId, p.TeamName);
+            string normTeam = ArasProjectRepository.NormalizeTeamCode(p.TeamName, p.TeamId);
             if (teamCounts.ContainsKey(normTeam))
             {
                 teamCounts[normTeam]++;
@@ -2167,7 +2167,7 @@ public class ProjectAnalyticsController
         sb.Append("\"teams\":[");
 
         string[] teamKeys = new string[] { "TPS", "ICS", "PMO", "SUS", "SHS", "Other" };
-        string[] teamNames = new string[] { "TPS 顧問團隊", "ICS 顧問團隊", "PMO 專案管理處", "SUS 永續服務處", "SHS 顧問團隊", "其他團隊" };
+        string[] teamNames = new string[] { "TPS", "ICS", "PMO", "SUS", "SHS", "Other" };
         string[] teamColors = new string[] { "#2563eb", "#0ea5e9", "#8b5cf6", "#10b981", "#f59e0b", "#64748b" };
 
         for (int k = 0; k < teamKeys.Length; k++)

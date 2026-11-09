@@ -61,14 +61,18 @@ function runE2ETests() {
   }
   console.log(" [PASS] 1.2 專案類型 (cn_project_type) 完整提供 9 大類型下拉式複選，且預設勾選 1.Standard 與 2.Professional");
 
-  // 驗證需求 4：團隊選單包含 TPS, ICS, PMO, SUS, SHS, Other
+  // 驗證需求 4：團隊選單純淨包含 TPS, ICS, PMO, SUS, SHS, Other (無冗餘中文)
   const requiredTeams = ["TPS", "ICS", "PMO", "SUS", "SHS", "Other"];
   for (const t of requiredTeams) {
-    if (!domHtml.includes(`<option value="${t}">`)) {
-      throw new Error(`執行團隊選單遺漏: ${t}`);
+    if (!domHtml.includes(`<option value="${t}">${t}</option>`)) {
+      throw new Error(`執行團隊選單純代碼選項遺漏或不符: ${t}`);
     }
   }
-  console.log(" [PASS] 1.3 執行團隊選單正確包含 TPS, ICS, PMO, SUS, SHS, Other");
+  // 嚴格驗證不得包含任何冗餘中文後綴 (如 顧問團隊、專案管理處)
+  if (domHtml.includes("TPS 顧問團隊") || domHtml.includes("ICS 顧問團隊") || domHtml.includes("PMO 專案管理處")) {
+    throw new Error("執行團隊選單仍殘留不正確的中文XX團隊後綴！");
+  }
+  console.log(" [PASS] 1.3 執行團隊選單純淨包含 TPS, ICS, PMO, SUS, SHS, Other (已徹底移除中文XX團隊後綴)");
 
   // 驗證需求 1：首頁長條圖渲染 (動態狀態標題)
   if (!domHtml.includes("各執行團隊進行中 (Active) 專案數量統計") ||

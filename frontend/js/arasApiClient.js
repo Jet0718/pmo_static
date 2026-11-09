@@ -612,13 +612,29 @@
   // 安全數值正規化：防止產生 NaN 或 Infinity
   
   // 正規化團隊代碼 (與後端 NormalizeTeamCode 100% 對齊，支援 GUID 與 keyed_name)
+  // 已知 BDM 專案管理處團隊 GUID 映射字典
+  var KNOWN_TEAM_GUIDS = {
+    "604F804DDA84451CA3B6CB54CD905BC9": "TPS",
+    "0DE0880740CF41E68518D86891A9B83A": "ICS",
+    "CDE4225D27224672B7CDDD497486C5AA": "PMO",
+    "ABBACF8E3BEB4D87AFFE86D1608BA5E3": "SUS",
+    "BF5B92B912DD4865966731F946091ABA": "SHS",
+    "28835013218C4AFB811EDC39C85375FA": "WHS",
+    "4826D4B55C834A048CAEAE77AAA6FFFA": "CDS"
+  };
+
+  // 正規化團隊代碼 (純代碼：TPS, ICS, PMO, SUS, SHS, Other，支援 GUID 與 keyed_name 雙向解析)
   function normalizeTeamCode(teamId = "", teamName = "") {
-    var str = (String(teamName || "") + " " + String(teamId || "")).toUpperCase();
-    if (str.indexOf("TPS") >= 0) return "TPS";
-    if (str.indexOf("ICS") >= 0) return "ICS";
-    if (str.indexOf("PMO") >= 0) return "PMO";
-    if (str.indexOf("SUS") >= 0) return "SUS";
-    if (str.indexOf("SHS") >= 0) return "SHS";
+    var s1 = String(teamId || "").trim();
+    var s2 = String(teamName || "").trim();
+    if (KNOWN_TEAM_GUIDS[s1.toUpperCase()]) return KNOWN_TEAM_GUIDS[s1.toUpperCase()];
+    if (KNOWN_TEAM_GUIDS[s2.toUpperCase()]) return KNOWN_TEAM_GUIDS[s2.toUpperCase()];
+    var combined = (s1 + " " + s2).toUpperCase();
+    if (combined.indexOf("TPS") >= 0) return "TPS";
+    if (combined.indexOf("ICS") >= 0) return "ICS";
+    if (combined.indexOf("PMO") >= 0) return "PMO";
+    if (combined.indexOf("SUS") >= 0) return "SUS";
+    if (combined.indexOf("SHS") >= 0) return "SHS";
     return "Other";
   }
 
@@ -971,7 +987,7 @@
       var allowedTypes = typeFilter.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
 
       var teamKeys = ["TPS", "ICS", "PMO", "SUS", "SHS", "Other"];
-      var teamNames = ["TPS 顧問團隊", "ICS 顧問團隊", "PMO 專案管理處", "SUS 永續服務處", "SHS 顧問團隊", "其他團隊"];
+      var teamNames = ["TPS", "ICS", "PMO", "SUS", "SHS", "Other"];
       var teamColors = ["#2563eb", "#0ea5e9", "#8b5cf6", "#10b981", "#f59e0b", "#64748b"];
       var counts = { TPS: 0, ICS: 0, PMO: 0, SUS: 0, SHS: 0, Other: 0 };
       var totalActive = 0;

@@ -25,3 +25,7 @@
    - **色碼防呆**：針對 `status_1~12`、`bcs_project_status` 或 `rollup_status`，若值為 Hex 色碼（如 `#FFD800`、`#FF0000`、`#00FF00`）則自動渲染為對應顏色圓點/標籤，避免將色碼當成純文字顯示。
    - **數值防呆**：針對完成率、SPI、CPI 執行 `isFinite` 與 `NaN` 防護，避免出現 `NaN%` 或 `[object Object]`。
    - **浮層防裁切**：Modal 與 Tooltip 統一掛載於 `document.body`，設定 `position: fixed; z-index: 999999`。
+
+## 4. 執行團隊 (team_id) 下拉選單與圖表文字規範
+- `#filter-team` 篩選下拉選單與長條圖標籤一律使用純淨代碼：`TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`，嚴禁附加「XX團隊」等冗餘中文。
+- 團隊長條圖各長條色塊標籤、提示文字及右側統計徽章，均依據當前篩選條件動態聯動計算。
