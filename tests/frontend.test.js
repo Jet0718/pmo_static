@@ -159,3 +159,72 @@ test("6. DashboardStateStore 與 SVG 圖表/視圖渲染器應輸出零 NaN 且�
   assert.ok(assigneeHtml.includes("OVERLOAD"));
   assert.ok(!assigneeHtml.includes("NaN"));
 });
+
+test("7. 單一專案 WBS 階段應嚴格依名稱自然排序升冪，且本專案成員統計應包含全體指派成員", () => {
+  const fakeDetail = {
+    project: {
+      proj_num: 2339,
+      project_name: "亞昕PLM導入專案",
+      pm_name: "吳怡潔 Joy",
+      team_name: "TPS",
+      territory: "台北服務中心",
+      customer_name: "亞昕科技",
+      sched_start: "2025-12-22",
+      sched_due: "2026-08-13",
+      actual_progress: 76.0,
+      expected_progress: 86.0,
+      progress_gap: 10.0,
+      delay_days: 178,
+      spi: 0.88,
+      cpi: 2.81,
+      planned_value: 1218,
+      earned_value: 1076,
+      actual_cost: 452.5,
+      exp_mandays: 177,
+      remainder_hours: 1153,
+      completed_tasks: 20,
+      total_tasks: 27,
+      in_progress_tasks: 5,
+      not_started_tasks: 2,
+      overdue_tasks: 7,
+      phases: []
+    },
+    // 輸入刻意錯亂之主階段順序 (50 -> 40 -> 30 -> 20 -> 10 -> 60)
+    wbs_items: [
+      { wbs_code: ".2", wbs_name: "50 上線準備", classification: "Phase", sched_start: "2026-05-18", sched_due: "2026-06-03", completion: 60.0, expected_completion: 100.0, schedule_variance_days: 159, spi: 0.60, cpi: 5.14, completed_tasks: 3, in_progress_tasks: 2, overdue_tasks: 2, health_light: "RED" },
+      { wbs_code: ".2", wbs_name: "40 測試驗證", classification: "Phase", sched_start: "2026-03-31", sched_due: "2026-05-15", completion: 70.0, expected_completion: 100.0, schedule_variance_days: 178, spi: 0.70, cpi: 1.66, completed_tasks: 3, in_progress_tasks: 2, overdue_tasks: 2, health_light: "RED" },
+      { wbs_code: ".2", wbs_name: "30 系統設計", classification: "Phase", sched_start: "2026-02-23", sched_due: "2026-03-30", completion: 100.0, expected_completion: 100.0, schedule_variance_days: 0, spi: 1.0, cpi: 1.0, completed_tasks: 5, in_progress_tasks: 0, overdue_tasks: 0, health_light: "GREEN" },
+      { wbs_code: ".2", wbs_name: "20 需求分析", classification: "Phase", sched_start: "2025-12-25", sched_due: "2026-02-13", completion: 100.0, expected_completion: 100.0, schedule_variance_days: 0, spi: 1.0, cpi: 1.0, completed_tasks: 4, in_progress_tasks: 0, overdue_tasks: 0, health_light: "GREEN" },
+      { wbs_code: ".2", wbs_name: "10 啟動階段", classification: "Phase", sched_start: "2025-12-22", sched_due: "2025-12-25", completion: 100.0, expected_completion: 100.0, schedule_variance_days: 0, spi: 1.0, cpi: 1.0, completed_tasks: 2, in_progress_tasks: 0, overdue_tasks: 0, health_light: "GREEN" },
+      { wbs_code: ".2", wbs_name: "60 系統上線", classification: "Phase", sched_start: "2026-06-04", sched_due: "2026-08-13", completion: 0.0, expected_completion: 100.0, schedule_variance_days: 88, spi: 0.0, cpi: 0.0, completed_tasks: 0, in_progress_tasks: 1, overdue_tasks: 1, health_light: "RED" }
+    ],
+    // 包含多位實際負責人 (managed_by_id)
+    assignees: [
+      { assignee_id: "USR_1", assignee_name: "陸睿旭 Andrew", total_tasks: 12, completed_tasks: 8, in_progress_tasks: 2, not_started_tasks: 2, overdue_tasks: 2, load_level: "NORMAL" },
+      { assignee_id: "USR_2", assignee_name: "張國倫 Allen.chang", total_tasks: 8, completed_tasks: 6, in_progress_tasks: 1, not_started_tasks: 1, overdue_tasks: 1, load_level: "NORMAL" },
+      { assignee_id: "USR_3", assignee_name: "吳怡潔 Joy", total_tasks: 7, completed_tasks: 6, in_progress_tasks: 1, not_started_tasks: 0, overdue_tasks: 0, load_level: "NORMAL" }
+    ]
+  };
+
+  const html = PMODashboardApp.renderProjectDetailView(fakeDetail, [fakeDetail.project]);
+  
+  // 驗證成員統計卡片包含全體指派成員 (不只有專案經理一人)
+  assert.ok(html.includes("陸睿旭 Andrew"), "單一專案成員應包含陸睿旭 Andrew");
+  assert.ok(html.includes("張國倫 Allen.chang"), "單一專案成員應包含張國倫 Allen.chang");
+  assert.ok(html.includes("吳怡潔 Joy"), "單一專案成員應包含吳怡潔 Joy");
+
+  // 驗證 WBS 明細表中，10 啟動階段 在 20 需求分析 之前，20 在 30 之前，50 在 60 之前
+  const pos10 = html.indexOf("10 啟動階段");
+  const pos20 = html.indexOf("20 需求分析");
+  const pos30 = html.indexOf("30 系統設計");
+  const pos40 = html.indexOf("40 測試驗證");
+  const pos50 = html.indexOf("50 上線準備");
+  const pos60 = html.indexOf("60 系統上線");
+
+  assert.ok(pos10 !== -1 && pos20 !== -1 && pos30 !== -1 && pos40 !== -1 && pos50 !== -1 && pos60 !== -1, "所有六大階段皆應存在");
+  assert.ok(pos10 < pos20, "10 啟動階段 必須排在 20 需求分析 之前");
+  assert.ok(pos20 < pos30, "20 需求分析 必須排在 30 系統設計 之前");
+  assert.ok(pos30 < pos40, "30 系統設計 必須排在 40 測試驗證 之前");
+  assert.ok(pos40 < pos50, "40 測試驗證 必須排在 50 上線準備 之前");
+  assert.ok(pos50 < pos60, "50 上線準備 必須排在 60 系統上線 之前");
+});

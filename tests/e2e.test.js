@@ -127,8 +127,50 @@ function runE2ETests() {
   }
   console.log(" [PASS] 1.6 多專案總覽表取消獨立下鑽操作欄位，並將下鑽連結完美整併於第一欄專案編號中");
 
+  // 3. 驗證單一專案下鑽視圖：WBS 階段名稱升冪排序與成員任務負荷 (圖1 & 圖2)
+  const detailRunnerPath = path.join(FRONTEND_DIR, "e2e_detail_runner.html");
+  const detailRunnerContent = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/></head>
+<body>
+  <div id="container"></div>
+  <script src="./js/arasApiClient.js"></script>
+  <script src="./js/dashboardStore.js"></script>
+  <script src="./js/svgChartEngine.js"></script>
+  <script src="./js/dashboardApp.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", async function() {
+      const client = new window.PMOApi.ArasApiClient();
+      const store = new window.PMOStore.DashboardStateStore(client);
+      await store.setActiveTab("PROJECT_DETAIL", 2127);
+      document.getElementById("container").innerHTML = window.PMODashboardApp.renderProjectDetailView(store.projectDetailData, [store.projectDetailData.project]);
+    });
+  </script>
+</body>
+</html>`;
+  fs.writeFileSync(detailRunnerPath, detailRunnerContent, "utf8");
+
+  const detailDom = runChromeDumpDom(detailRunnerPath);
+  if (fs.existsSync(detailRunnerPath)) fs.unlinkSync(detailRunnerPath);
+
+  // 驗證成員統計卡片包含指派成員 (林俊傑、張家豪)
+  if (!detailDom.includes("林俊傑 (資深架構師)") || !detailDom.includes("張家豪 (全端工程師)")) {
+    throw new Error("單一專案成員統計卡片遺漏實際任務負責人 (managed_by_id)！");
+  }
+  console.log(" [PASS] 1.7 單一專案本專案成員 (Assignee) 任務負荷完整呈現所有指派成員 (包含林俊傑、張家豪等)");
+
+  // 驗證 WBS 主階段名稱排序：Phase 1 在 Phase 2 之前，Phase 2 在 Phase 3 之前
+  const idxP1 = detailDom.indexOf("Phase 1: 商業流程藍圖與需求確認");
+  const idxP2 = detailDom.indexOf("Phase 2: 系統架構設計與資料模型配置");
+  const idxP3 = detailDom.indexOf("Phase 3: 客製化 Server/Client Method 開發");
+  if (idxP1 === -1 || idxP2 === -1 || idxP3 === -1 || !(idxP1 < idxP2 && idxP2 < idxP3)) {
+    throw new Error("單一專案 WBS 階段與明細表未依名稱升冪排序！");
+  }
+  console.log(" [PASS] 1.8 各階段 (WBS Stage / Milestone) 與明細表嚴格依名稱自然排序升冪排列 (Phase 1 -> Phase 2 -> Phase 3)");
+
   console.log("======================================================");
-  console.log("🎉 所有 Chrome 瀏覽器 E2E 測試全部通過 (6 項測試全數 PASS)！");
+  console.log("🎉 所有 Chrome 瀏覽器 E2E 測試全部通過 (8 項測試全數 PASS)！");
 }
 
 if (require.main === module) {

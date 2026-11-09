@@ -102,12 +102,18 @@
   }
 
   // 渲染 WBS 各階段進度達成率 vs 應有進度與時程偏差視覺化圖表
-  function renderWbsStageDeviationChart(wbsStages = []) {
+    function renderWbsStageDeviationChart(wbsStages = []) {
     if (!wbsStages || wbsStages.length === 0) {
       return '<div style="padding:24px;text-align:center;color:#64748b;">此專案尚無 WBS 階段明細資料</div>';
     }
+    // 依據階段名稱自然排序 (例如 10 啟動階段 -> 20 需求分析 -> 60 系統上線)
+    var sortedStages = wbsStages.slice().sort(function (a, b) {
+      var nameA = String(a.wbs_name || a.stage_name || "");
+      var nameB = String(b.wbs_name || b.stage_name || "");
+      return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: "base" });
+    });
     var html = '<div style="display:flex;flex-direction:column;gap:14px;">';
-    wbsStages.forEach(function (st) {
+    sortedStages.forEach(function (st) {
       var actual = Number(st.completion || 0);
       var expected = Number(st.expected_completion || 0);
       var varDays = Number(st.schedule_variance_days || 0);

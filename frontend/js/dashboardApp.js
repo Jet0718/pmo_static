@@ -329,9 +329,14 @@
         phasesGridHtml +
       '</div>';
 
-    // WBS 階段進度達成率與時程偏差分析圖 + 明細表
+        // WBS 階段進度達成率與時程偏差分析圖 + 明細表 (嚴格按名稱自然排序升冪：10 -> 20 -> ... -> 60)
+    var sortedWbsItems = (wbsItems || []).slice().sort(function (a, b) {
+      var nameA = String(a.wbs_name || a.stage_name || "");
+      var nameB = String(b.wbs_name || b.stage_name || "");
+      return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: "base" });
+    });
     var wbsRowsHtml = "";
-    wbsItems.forEach(function (w) {
+    sortedWbsItems.forEach(function (w) {
       var varDays = Number(w.schedule_variance_days || 0);
       wbsRowsHtml +=
         '<tr>' +
@@ -351,7 +356,7 @@
       '<div class="chart-grid-2">' +
         '<div class="pmo-card">' +
           '<div class="pmo-card-header"><h3>各階段 (WBS Stage / Milestone) 進度達成率與時程偏差分析</h3></div>' +
-          PMOCharts.renderWbsStageDeviationChart(wbsItems) +
+          PMOCharts.renderWbsStageDeviationChart(sortedWbsItems) +
         '</div>' +
         '<div class="pmo-card">' +
           '<div class="pmo-card-header"><h3>本專案成員 (Assignee) 任務負荷與完成狀態統計</h3></div>' +

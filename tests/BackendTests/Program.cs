@@ -400,7 +400,39 @@ public class Program
         reqAllState.setProperty("route", "/api/v1/dashboard/team-summary");
         reqAllState.setProperty("state", "ALL");
         string jsonAllState = ctrl.HandleItemRequest(reqAllState, today);
-        AssertTrue(jsonAllState.Contains("\"status\":\"success\"") && jsonAllState.Contains("\"total_projects\":1"),
+                AssertTrue(jsonAllState.Contains("\"status\":\"success\"") && jsonAllState.Contains("\"total_projects\":1"),
             "動態狀態篩選測試：state=ALL 應正確統計專案數量");
+
+        // 新增測試：WBS Stage 名稱自然排序升冪驗證 (10 啟動階段 -> 20 需求分析 -> ... -> 60 系統上線)
+        AssertTrue(WbsStageAnalyzer.CompareStageNamesNatural("10 啟動階段", "20 需求分析") < 0, "自然排序：10 啟動階段 應排在 20 需求分析 之前");
+        AssertTrue(WbsStageAnalyzer.CompareStageNamesNatural("50 上線準備", "40 測試驗證") > 0, "自然排序：50 上線準備 應排在 40 測試驗證 之後");
+        AssertTrue(WbsStageAnalyzer.CompareStageNamesNatural("10 啟動階段", "60 系統上線") < 0, "自然排序：10 啟動階段 應排在 60 系統上線 之前");
+
+        // 測試 AnalyzeMainStages 自然排序
+        System.Collections.Generic.List<WbsRecord> unorderedWbs = new System.Collections.Generic.List<WbsRecord>
+        {
+            new WbsRecord { Id = "ROOT", ProjNum = 999, Name = "Root", IsTop = true },
+            new WbsRecord { Id = "W50", ProjNum = 999, ParentWbsId = "ROOT", Name = "50 上線準備" },
+            new WbsRecord { Id = "W20", ProjNum = 999, ParentWbsId = "ROOT", Name = "20 需求分析" },
+            new WbsRecord { Id = "W10", ProjNum = 999, ParentWbsId = "ROOT", Name = "10 啟動階段" },
+            new WbsRecord { Id = "W60", ProjNum = 999, ParentWbsId = "ROOT", Name = "60 系統上線" }
+        };
+        System.Collections.Generic.List<WbsStageAnalyticsDto> sortedStages = stageAnalyzer.AnalyzeMainStages("ROOT", unorderedWbs, new System.Collections.Generic.List<ActivityRecord>(), today);
+        AssertTrue(sortedStages.Count == 4 && sortedStages[0].StageName == "10 啟動階段" && sortedStages[1].StageName == "20 需求分析" && sortedStages[3].StageName == "60 系統上線",
+            "WBS 主階段排序：輸入亂序時應自動按名稱升冪排列 (10 -> 20 -> 50 -> 60)");
+
+        // 新增測試：Activity2 Assignee 優先取 managed_by_id (任務負責人) 而非 owned_by_id (專案經理)
+        FakeProjectRepository fakeRepo = new FakeProjectRepository();
+        ActivityRecord actWithBoth = new ActivityRecord
+        {
+            Id = "ACT_TEST",
+            ProjNum = 999,
+            Name = "系統架構細設",
+            AssigneeId = "USR_DEV_ALLEN",
+            AssigneeName = "張國倫 Allen.chang"
+        };
+        System.Collections.Generic.List<AssigneeWorkloadDto> aggList = workloadAgg.AggregateByAssignee(new System.Collections.Generic.List<ActivityRecord> { actWithBoth }, today);
+        AssertTrue(aggList.Count == 1 && aggList[0].AssigneeName == "張國倫 Allen.chang",
+            "Assignee 負荷統計：應以任務實際負責人 (managed_by_id) 作為統計對象");
     }
 }

@@ -29,3 +29,7 @@
 ## 4. 執行團隊 (team_id) 下拉選單與圖表文字規範
 - `#filter-team` 篩選下拉選單與長條圖標籤一律使用純淨代碼：`TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`，嚴禁附加「XX團隊」等冗餘中文。
 - 團隊長條圖各長條色塊標籤、提示文字及右側統計徽章，均依據當前篩選條件動態聯動計算。
+
+## 5. WBS 階段自然排序與成員負荷展示
+- `renderProjectDetailView` 與 `renderWbsStageDeviationChart` 必須對 `wbs_items` 依名稱進行自然升冪排序（如 `10 啟動階段` &rarr; `20 需求分析`）。
+- 單一專案成員負荷與全域成員負荷圖表均正確渲染 `managed_by_id` 統計之成員。

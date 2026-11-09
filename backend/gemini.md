@@ -55,3 +55,7 @@
 - 執行團隊名稱必須純淨採用代碼：`TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`，不得自作主張附加「XX團隊」、「XX處」等中文字串。
 - Aras IOM 查詢 Project 時，若 `getPropertyAttribute("team_id", "keyed_name")` 未回傳或回傳空，後端必須透過 Team 快取字典（包含預載之 BDM Team GUID 映射表與 `Team` ItemType 查詢）反查真實團隊代碼，避免所有專案誤入 Other。
 - `NormalizeTeamCode(teamName, teamId)` 必須兼容雙參數無序傳入，同時比對兩者與 GUID 字典。
+
+## 5. Activity2 任務指派人與 WBS 排序規範
+- **指派人取得**：`GetActivitiesWithAssignments` 中，首要讀取 `managed_by_id` 作為 `AssigneeId` / `AssigneeName`，若為空才回退至 `owned_by_id`。
+- **WBS 階段排序**：`AnalyzeMainStages` 回傳之主階段清單必須依據 `StageName` 進行自然升冪排序。

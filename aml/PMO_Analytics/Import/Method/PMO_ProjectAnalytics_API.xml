@@ -1063,6 +1063,40 @@ public class ProjectHealthCalculator : IProjectHealthCalculator
 /// </summary>
 public class WbsStageAnalyzer : IWbsStageAnalyzer
 {
+    /// <summary>
+    /// 自然排序比較函式：優先提取前綴數值進行升冪比較 (如 "10 啟動階段" < "20 需求分析" < "60 系統上線")
+    /// </summary>
+    public static int CompareStageNamesNatural(string a, string b)
+    {
+        string s1 = (a ?? "").Trim();
+        string s2 = (b ?? "").Trim();
+        if (s1 == s2) return 0;
+        if (string.IsNullOrEmpty(s1)) return -1;
+        if (string.IsNullOrEmpty(s2)) return 1;
+
+        // 提取開頭連續數字
+        int num1 = ExtractLeadingInt(s1);
+        int num2 = ExtractLeadingInt(s2);
+        if (num1 != -1 && num2 != -1 && num1 != num2)
+        {
+            return num1.CompareTo(num2);
+        }
+
+        return string.Compare(s1, s2, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int ExtractLeadingInt(string s)
+    {
+        int i = 0;
+        while (i < s.Length && char.IsDigit(s[i])) i++;
+        if (i > 0)
+        {
+            int val;
+            if (int.TryParse(s.Substring(0, i), out val)) return val;
+        }
+        return -1;
+    }
+
     private readonly IProjectHealthCalculator _healthCalculator;
 
     public WbsStageAnalyzer(IProjectHealthCalculator healthCalculator)
@@ -1088,7 +1122,7 @@ public class WbsStageAnalyzer : IWbsStageAnalyzer
     }
 
     /// <summary>
-    /// 分析專案第一階主階段 (Main Stages: parent_wbs_id == rootWbsId) 之達成率與時程偏差
+    /// 分析專案第一階主階段 (Main Stages: parent_wbs_id == rootWbsId) 之達成率與時程偏差 (自然升冪排序)
     /// </summary>
     public System.Collections.Generic.List<WbsStageAnalyticsDto> AnalyzeMainStages(
         string rootWbsId,
@@ -1098,12 +1132,24 @@ public class WbsStageAnalyzer : IWbsStageAnalyzer
     )
     {
         System.Collections.Generic.List<WbsStageAnalyticsDto> fullTree = BuildWbsTree(rootWbsId, allWbs, activities, asOfDate);
+        System.Collections.Generic.List<WbsStageAnalyticsDto> stages;
         // 若 fullTree 只有一個 Root WBS 節點且包含子節點，回傳其第一層主階段子節點
         if (fullTree.Count == 1 && fullTree[0].Children != null && fullTree[0].Children.Count > 0)
         {
-            return fullTree[0].Children;
+            stages = fullTree[0].Children;
         }
-        return fullTree;
+        else
+        {
+            stages = fullTree;
+        }
+
+        // 依據使用者規範：嚴格按階段名稱 (StageName) 升冪 (如 10 啟動階段 -> 20 需求分析 -> 60 系統上線)
+        stages.Sort(delegate(WbsStageAnalyticsDto a, WbsStageAnalyticsDto b)
+        {
+            return CompareStageNamesNatural(a.StageName, b.StageName);
+        });
+
+        return stages;
     }
 
     /// <summary>
