@@ -44,23 +44,44 @@
     var selectedTeamId = (store && store.selectedTeamForDrill) || (store && store.filters && store.filters.team_id !== "ALL" ? store.filters.team_id : null);
     var isExpanded = store ? Boolean(store.isDetailExpanded) : Boolean(data && data.summary);
 
-    // 1. 首頁極速展示卡片：執行團隊 (team_id) Active 專案數量長條統計圖
+    // 1. 首頁極速展示卡片：執行團隊 (team_id) 專案數量長條統計圖 (隨狀態篩選動態聯動)
     var barChartHtml = "";
     if (teamSummary && typeof PMOCharts.renderTeamActiveProjectsBarChart === "function") {
+      var currentFilterState = (store && store.filters && store.filters.state) ? String(store.filters.state) : "Active";
+      var dynamicTitle = "各執行團隊專案數量統計";
+      var dynamicBadge = "專案總計: ";
+      if (currentFilterState.toLowerCase() === "active") {
+        dynamicTitle = "各執行團隊進行中 (Active) 專案數量統計";
+        dynamicBadge = "進行中專案總計: ";
+      } else if (currentFilterState.toLowerCase() === "closed") {
+        dynamicTitle = "各執行團隊已結案 (closed) 專案數量統計";
+        dynamicBadge = "已結案專案總計: ";
+      } else if (currentFilterState.toLowerCase() === "pending") {
+        dynamicTitle = "各執行團隊暫停中 (pending) 專案數量統計";
+        dynamicBadge = "暫停中專案總計: ";
+      } else if (currentFilterState.toUpperCase() === "ALL") {
+        dynamicTitle = "各執行團隊專案數量統計 (全部狀態)";
+        dynamicBadge = "專案總計: ";
+      } else {
+        dynamicTitle = "各執行團隊【" + escapeHtml(currentFilterState) + "】專案數量統計";
+        dynamicBadge = escapeHtml(currentFilterState) + "專案總計: ";
+      }
+      var totalProjCount = Number(teamSummary.total_projects !== undefined ? teamSummary.total_projects : (teamSummary.total_active_projects || 0));
+
       barChartHtml =
         '<div class="pmo-card" style="margin-bottom:16px;">' +
           '<div class="pmo-card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
             '<div>' +
               '<h3 style="margin:0;display:flex;align-items:center;gap:8px;">' +
                 '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#2563eb;"></span>' +
-                '各執行團隊啟動中 (Active) 專案數量統計' +
+                dynamicTitle +
               '</h3>' +
               '<p style="margin:4px 0 0 0;font-size:12px;color:#64748b;">' +
                 '涵蓋 TPS、ICS、PMO、SUS、SHS 與 Other 等團隊 | 點擊長條柱色塊可直接向下展開明細' +
               '</p>' +
             '</div>' +
             '<div style="font-size:13px;font-weight:700;color:#2563eb;background:#eff6ff;padding:4px 12px;border-radius:20px;">' +
-              '啟動中專案總計: ' + Number(teamSummary.total_active_projects || 0) + ' 案' +
+              dynamicBadge + totalProjCount + ' 案' +
             '</div>' +
           '</div>' +
           PMOCharts.renderTeamActiveProjectsBarChart(teamSummary, selectedTeamId) +
@@ -75,7 +96,7 @@
             '🚀 首頁高速概覽已就緒' +
           '</div>' +
           '<p style="color:#64748b;font-size:14px;max-width:620px;margin:0 auto 16px auto;line-height:1.6;">' +
-            '系統已先以最快速度載入執行團隊啟動中專案統計。請<strong>點擊上方長條圖的任一團隊色塊 (如 TPS, ICS, PMO, SUS, SHS, Other)</strong>，或點選下方按鈕展開詳細多專案進度與 Ph 1~12 階段分析。' +
+            '系統已先以最快速度載入執行團隊專案數量統計。請<strong>點擊上方長條圖的任一團隊色塊 (如 TPS, ICS, PMO, SUS, SHS, Other)</strong>，或點選下方按鈕展開詳細多專案進度與 Ph 1~12 階段分析。' +
           '</p>' +
           '<button type="button" class="btn-action js-expand-all-teams" style="background:#2563eb;color:#fff;padding:9px 24px;border-radius:6px;font-weight:600;border:none;cursor:pointer;font-size:13px;">' +
             '展開全部專案進度明細 &darr;' +
@@ -521,9 +542,32 @@
       }
     });
 
-    // 需求 2：專案類型 (cn_project_type) 複選 Checkbox 監聽
+    // 需求 2：專案類型 (cn_project_type 9 大類) 下拉式複選元件監聽與連動
+    var typeDropdown = doc.getElementById("multiselect-project-type");
+    var typeTrigger = doc.getElementById("type-dropdown-trigger");
+    var typePanel = doc.getElementById("type-dropdown-panel");
+    var typeText = doc.getElementById("type-dropdown-text");
     var typeCheckboxes = doc.querySelectorAll(".js-filter-type");
     var hiddenTypeInput = doc.getElementById("filter-type");
+    var btnTypeSelectAll = doc.getElementById("btn-type-select-all");
+    var btnTypeClearAll = doc.getElementById("btn-type-clear-all");
+    var btnTypeDefault = doc.getElementById("btn-type-default");
+
+    function updateTypeDropdownDisplay(selectedValues) {
+      if (!typeText) return;
+      if (selectedValues.length === 0) {
+        typeText.textContent = "未選擇專案類型 (0 項)";
+      } else if (selectedValues.length === typeCheckboxes.length) {
+        typeText.textContent = "全部專案類型 (全選 " + selectedValues.length + " 項)";
+      } else {
+        var preview = selectedValues.slice(0, 2).join(", ");
+        if (selectedValues.length > 2) {
+          preview += " 等 " + selectedValues.length + " 項";
+        }
+        typeText.textContent = "已選 " + selectedValues.length + " 項 (" + preview + ")";
+      }
+    }
+
     function handleTypeCheckboxChange() {
       var selected = [];
       for (var i = 0; i < typeCheckboxes.length; i++) {
@@ -533,10 +577,81 @@
       }
       var typeVal = selected.join(",");
       if (hiddenTypeInput) hiddenTypeInput.value = typeVal;
+      updateTypeDropdownDisplay(selected);
       store.updateFilters({ project_type: typeVal || "NONE" });
     }
+
     for (var tc = 0; tc < typeCheckboxes.length; tc++) {
       typeCheckboxes[tc].addEventListener("change", handleTypeCheckboxChange);
+    }
+
+    // 點擊觸發鈕開啟/關閉下拉面板
+    if (typeTrigger && typeDropdown) {
+      typeTrigger.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var isOpen = typeDropdown.classList.contains("open");
+        if (isOpen) {
+          typeDropdown.classList.remove("open");
+          typeTrigger.classList.remove("active");
+          typeTrigger.setAttribute("aria-expanded", "false");
+        } else {
+          typeDropdown.classList.add("open");
+          typeTrigger.classList.add("active");
+          typeTrigger.setAttribute("aria-expanded", "true");
+        }
+      });
+    }
+
+    // 點擊面板內部不冒泡，防止自動關閉
+    if (typePanel) {
+      typePanel.addEventListener("click", function (e) {
+        e.stopPropagation();
+      });
+    }
+
+    // 點擊頁面其他空白處自動收合下拉面板
+    doc.addEventListener("click", function () {
+      if (typeDropdown && typeDropdown.classList.contains("open")) {
+        typeDropdown.classList.remove("open");
+        if (typeTrigger) {
+          typeTrigger.classList.remove("active");
+          typeTrigger.setAttribute("aria-expanded", "false");
+        }
+      }
+    });
+
+    // 快捷鍵：全選
+    if (btnTypeSelectAll) {
+      btnTypeSelectAll.addEventListener("click", function (e) {
+        e.stopPropagation();
+        for (var i = 0; i < typeCheckboxes.length; i++) {
+          typeCheckboxes[i].checked = true;
+        }
+        handleTypeCheckboxChange();
+      });
+    }
+
+    // 快捷鍵：清除
+    if (btnTypeClearAll) {
+      btnTypeClearAll.addEventListener("click", function (e) {
+        e.stopPropagation();
+        for (var i = 0; i < typeCheckboxes.length; i++) {
+          typeCheckboxes[i].checked = false;
+        }
+        handleTypeCheckboxChange();
+      });
+    }
+
+    // 快捷鍵：恢復預設 (1.Standard & 2.Professional)
+    if (btnTypeDefault) {
+      btnTypeDefault.addEventListener("click", function (e) {
+        e.stopPropagation();
+        for (var i = 0; i < typeCheckboxes.length; i++) {
+          var val = typeCheckboxes[i].value;
+          typeCheckboxes[i].checked = (val === "1.Standard" || val === "2.Professional");
+        }
+        handleTypeCheckboxChange();
+      });
     }
 
     var kwInput = doc.getElementById("filter-keyword");

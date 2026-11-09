@@ -225,7 +225,7 @@
             'x="' + x + '" y="' + y + '" width="' + barW + '" height="' + Math.max(4, barH) + '" rx="6" ' +
             'fill="' + escapeHtml(color) + '" ' + strokeAttr + ' data-team-id="' + escapeHtml(t.team_id) + '" ' +
             'style="transition:all 0.2s ease;filter:' + (isSel ? 'brightness(1.1) drop-shadow(0 4px 6px rgba(0,0,0,0.15))' : 'none') + ';">' +
-            '<title>' + escapeHtml(t.team_name) + ': ' + count + ' 案啟動中 (點擊展開明細)' + '</title>' +
+            '<title>' + escapeHtml(t.team_name) + ': ' + count + ' 案 (點擊展開明細)' + '</title>' +
           '</rect>' +
           // 底部團隊代碼標籤
           '<text x="' + (x + barW / 2) + '" y="' + (chartH - 8) + '" text-anchor="middle" font-size="12" font-weight="700" fill="' + (isSel ? '#2563eb' : '#475569') + '">' +

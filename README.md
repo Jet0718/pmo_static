@@ -9,11 +9,11 @@
 ## 1. 核心統計與分析功能
 
 1. **全域多專案健康度總覽與極速概覽 (`/api/v1/dashboard/summary` & `/api/v1/dashboard/team-summary`)**
-   - **首頁極速加載**：首頁載入時優先呼叫極速輕量端點 `/api/v1/dashboard/team-summary`，僅檢索 Project 主檔並統計「各執行團隊 (`team_id`) 啟動中 (`Active`) 專案數量長條圖」，完全不載入 WBS 與任務，達到毫秒級極速開屏。
+   - **首頁極速加載**：首頁載入時優先呼叫極速輕量端點 `/api/v1/dashboard/team-summary`，僅檢索 Project 主檔並統計「各執行團隊 (`team_id`) 專案數量長條圖」，統計結果完全聯動篩選條件（支援全部狀態、已結案、進行中等），並以 `team_id/@keyed_name` 精準識別團隊代碼，毫秒級極速開屏。
    - **統計圖色塊互動展開**：點擊長條圖中之各團隊色塊（`TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`）時，向下展開該團隊之健康度燈號分佈、EVM 與多專案進度明細列表。
    - **進階多維度過濾**：
-     - 專案狀態 (`state`)：預設為 `Active`。
-     - 專案類型 (`cn_project_type`)：支援複選 (OR 比對)，預設選中 `1.Standard` 與 `2.Professional`。
+     - 專案狀態 (`state`)：預設為 `Active`，支援 `ALL`、`closed`、`pending`。
+     - 專案類型 (`cn_project_type`)：支援 9 大完整類型複選 (OR 比對：`1.Standard`, `2.Professional`, `3.Upgrade`, `4.Customize`, `5.Product`, `6.Technical`, `7.Marketing`, `8.EmployeeTraining`, `F.Misc`)，預設選中 `1.Standard` 與 `2.Professional`。
      - 執行團隊 (`team_id`)：選單支援 `ALL`、`TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`。
    - **多專案進度明細列表**：取消獨立之「下鑽操作」欄位，直接將下鑽連結整合至第一欄「專案編號」，點擊專案編號即可切換至該專案之階段達成率與成員負荷分析。
 2. **各階段 (`Ph 1~12` & `WBS Element` / `Milestone`) 進度達成率與時程偏差分析 (`/api/v1/dashboard/project/{proj_num}` & `/api/v1/dashboard/wbs/{proj_num}`)**

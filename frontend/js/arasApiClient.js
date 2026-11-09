@@ -610,6 +610,18 @@
   }
 
   // 安全數值正規化：防止產生 NaN 或 Infinity
+  
+  // 正規化團隊代碼 (與後端 NormalizeTeamCode 100% 對齊，支援 GUID 與 keyed_name)
+  function normalizeTeamCode(teamId = "", teamName = "") {
+    var str = (String(teamName || "") + " " + String(teamId || "")).toUpperCase();
+    if (str.indexOf("TPS") >= 0) return "TPS";
+    if (str.indexOf("ICS") >= 0) return "ICS";
+    if (str.indexOf("PMO") >= 0) return "PMO";
+    if (str.indexOf("SUS") >= 0) return "SUS";
+    if (str.indexOf("SHS") >= 0) return "SHS";
+    return "Other";
+  }
+
   function safeNumber(val = 0, fallback = 0) {
     var num = Number(val);
     if (!Number.isFinite(num)) return fallback;
@@ -662,11 +674,12 @@
         return false;
       }
       if (teamFilter && teamFilter !== "ALL") {
+        var pTeam = normalizeTeamCode(p.team_id, p.team_name);
         if (teamFilter === "Other") {
-          if (["TPS", "ICS", "PMO", "SUS", "SHS"].indexOf(p.team_id) >= 0) {
+          if (["TPS", "ICS", "PMO", "SUS", "SHS"].indexOf(pTeam) >= 0) {
             return false;
           }
-        } else if (p.team_id !== teamFilter) {
+        } else if (pTeam !== teamFilter) {
           return false;
         }
       }
@@ -725,7 +738,7 @@
       svSum += safeNumber(p.cn_sv, 0);
       cvSum += safeNumber(p.cn_cv, 0);
 
-      var tid = p.team_id || "UNSPECIFIED";
+      var tid = normalizeTeamCode(p.team_id, p.team_name);
       if (!teamMap[tid]) {
         teamMap[tid] = {
           team_id: tid,
@@ -1020,6 +1033,7 @@
     DEFAULT_MOCK_PROJECTS: DEFAULT_MOCK_PROJECTS,
     normalizeStatusColor: normalizeStatusColor,
     safeNumber: safeNumber,
+    normalizeTeamCode: normalizeTeamCode,
     escapeXml: escapeXml,
     buildSummaryFromProjects: buildSummaryFromProjects,
     aggregateCrossProjectAssignees: aggregateCrossProjectAssignees

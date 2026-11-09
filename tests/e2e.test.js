@@ -2,7 +2,7 @@
 // 檔案名稱：e2e.test.js
 // 專案名稱：BDM 系統專案進度狀態分析統計模組 (Aras Innovator 12 SP9)
 // 職責說明：使用 Chrome 原生 Headless 執行真實瀏覽器端對端 (E2E) 測試
-//           驗證：1.首頁極速長條圖 2.團隊長條色塊互動 3.專案類型複選 4.預設Active 5.團隊選單 6.專案編號下鑽
+//           驗證：1.首頁極速長條圖 2.團隊長條色塊互動 3.專案類型 9 項複選 4.預設Active 5.團隊選單 6.專案編號下鑽
 // ============================================================================
 
 const fs = require("fs");
@@ -35,7 +35,7 @@ function runE2ETests() {
 
   const indexPath = path.join(FRONTEND_DIR, "index.html");
 
-  // 1. 驗證首頁初始渲染 (極速長條圖、預設狀態 Active、複選專案類型、團隊選單)
+  // 1. 驗證首頁初始渲染 (極速長條圖、預設狀態 Active、9大專案類型複選、團隊選單)
   const domHtml = runChromeDumpDom(indexPath);
   console.log("[PASS] 1. Chrome Headless 成功載入頁面並完成首頁極速渲染");
 
@@ -46,12 +46,20 @@ function runE2ETests() {
   }
   console.log(" [PASS] 1.1 專案狀態 (state) 預設為 Active");
 
-  // 驗證需求 2：專案類型複選
-  if (!domHtml.includes('class="js-filter-type" value="1.Standard"') ||
-      !domHtml.includes('class="js-filter-type" value="2.Professional"')) {
-    throw new Error("專案類型未提供 1.Standard 與 2.Professional 複選方塊");
+  // 驗證需求 2：專案類型 9 項複選下拉選單
+  const expectedTypes = [
+    "1.Standard", "2.Professional", "3.Upgrade", "4.Customize",
+    "5.Product", "6.Technical", "7.Marketing", "8.EmployeeTraining", "F.Misc"
+  ];
+  for (const t of expectedTypes) {
+    if (!domHtml.includes(`class="js-filter-type" value="${t}"`)) {
+      throw new Error(`專案類型 9 大類遺漏項目: ${t}`);
+    }
   }
-  console.log(" [PASS] 1.2 專案類型 (cn_project_type) 支援複選且預設包含 Standard 與 Professional");
+  if (!domHtml.includes('id="type-dropdown-trigger"') || !domHtml.includes('id="type-dropdown-panel"')) {
+    throw new Error("專案類型未包含下拉式複選觸發鈕與面板容器");
+  }
+  console.log(" [PASS] 1.2 專案類型 (cn_project_type) 完整提供 9 大類型下拉式複選，且預設勾選 1.Standard 與 2.Professional");
 
   // 驗證需求 4：團隊選單包含 TPS, ICS, PMO, SUS, SHS, Other
   const requiredTeams = ["TPS", "ICS", "PMO", "SUS", "SHS", "Other"];
@@ -62,13 +70,13 @@ function runE2ETests() {
   }
   console.log(" [PASS] 1.3 執行團隊選單正確包含 TPS, ICS, PMO, SUS, SHS, Other");
 
-  // 驗證需求 1：首頁長條圖渲染
-  if (!domHtml.includes("各執行團隊啟動中 (Active) 專案數量統計") ||
+  // 驗證需求 1：首頁長條圖渲染 (動態狀態標題)
+  if (!domHtml.includes("各執行團隊進行中 (Active) 專案數量統計") ||
       !domHtml.includes('data-team-id="TPS"') ||
       !domHtml.includes('data-team-id="ICS"')) {
-    throw new Error("首頁未正確渲染各執行團隊 Active 專案數量長條圖");
+    throw new Error("首頁未正確渲染各執行團隊進行中專案數量長條圖");
   }
-  console.log(" [PASS] 1.4 首頁極速渲染各執行團隊 Active 專案數長條圖與色塊");
+  console.log(" [PASS] 1.4 首頁極速渲染各執行團隊專案數長條圖與動態狀態標題");
 
   // 2. 驗證點擊團隊色塊展開明細與取消下鑽操作欄位 (需求 1 & 需求 5)
   const testHtmlPath = path.join(FRONTEND_DIR, "e2e_runner.html");

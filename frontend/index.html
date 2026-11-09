@@ -42,16 +42,52 @@
           <option value="pending">暫停中 (pending)</option>
         </select>
       </div>
-
       <div class="filter-item">
-        <label>專案類型 (cn_project_type 複選)：</label>
-        <div id="filter-type-checkboxes" style="display:inline-flex;gap:10px;align-items:center;background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:5px 10px;font-size:13px;">
-          <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;color:#1e293b;">
-            <input type="checkbox" class="js-filter-type" value="1.Standard" checked /> 1.Standard
-          </label>
-          <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;color:#1e293b;">
-            <input type="checkbox" class="js-filter-type" value="2.Professional" checked /> 2.Professional
-          </label>
+        <label>專案類型 (cn_project_type)：</label>
+        <div class="multiselect-dropdown" id="multiselect-project-type">
+          <div class="multiselect-trigger" id="type-dropdown-trigger" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false">
+            <span class="multiselect-trigger-text" id="type-dropdown-text">已選 2 項 (1.Standard, 2.Professional)</span>
+            <span class="multiselect-trigger-arrow">&#9662;</span>
+          </div>
+          <div class="multiselect-panel" id="type-dropdown-panel">
+            <div class="multiselect-actions">
+              <span style="font-size:12px;font-weight:700;color:#64748b;">複選專案類型</span>
+              <div style="display:flex;gap:6px;">
+                <button type="button" class="multiselect-action-btn" id="btn-type-select-all">全選</button>
+                <button type="button" class="multiselect-action-btn" id="btn-type-clear-all">清除</button>
+                <button type="button" class="multiselect-action-btn" id="btn-type-default">預設(1&2)</button>
+              </div>
+            </div>
+            <div class="multiselect-options" id="filter-type-checkboxes">
+              <label class="multiselect-option">
+                <input type="checkbox" class="js-filter-type" value="1.Standard" checked /> 1.Standard
+              </label>
+              <label class="multiselect-option">
+                <input type="checkbox" class="js-filter-type" value="2.Professional" checked /> 2.Professional
+              </label>
+              <label class="multiselect-option">
+                <input type="checkbox" class="js-filter-type" value="3.Upgrade" /> 3.Upgrade
+              </label>
+              <label class="multiselect-option">
+                <input type="checkbox" class="js-filter-type" value="4.Customize" /> 4.Customize
+              </label>
+              <label class="multiselect-option">
+                <input type="checkbox" class="js-filter-type" value="5.Product" /> 5.Product
+              </label>
+              <label class="multiselect-option">
+                <input type="checkbox" class="js-filter-type" value="6.Technical" /> 6.Technical
+              </label>
+              <label class="multiselect-option">
+                <input type="checkbox" class="js-filter-type" value="7.Marketing" /> 7.Marketing
+              </label>
+              <label class="multiselect-option">
+                <input type="checkbox" class="js-filter-type" value="8.EmployeeTraining" /> 8.EmployeeTraining
+              </label>
+              <label class="multiselect-option">
+                <input type="checkbox" class="js-filter-type" value="F.Misc" /> F.Misc
+              </label>
+            </div>
+          </div>
         </div>
         <input type="hidden" id="filter-type" value="1.Standard,2.Professional" />
       </div>

@@ -379,12 +379,28 @@ public class Program
                    jsonTeamSum.Contains("\"team_id\":\"Other\""),
             "RESTful 路由測試：/api/v1/dashboard/team-summary 回傳六大團隊極速長條統計 JSON");
 
-        // 新增：專案類型複選 (OR) 測試
+        // 新增：專案類型 9 大類複選 (OR) 測試
         Item reqMultiType = new Item("Method", "PMO_ProjectAnalytics_API");
         reqMultiType.setProperty("route", "/api/v1/dashboard/team-summary");
-        reqMultiType.setProperty("project_type", "1.Standard,2.Professional");
+        reqMultiType.setProperty("project_type", "1.Standard,2.Professional,3.Upgrade,4.Customize,5.Product,6.Technical,7.Marketing,8.EmployeeTraining,F.Misc");
         string jsonMultiType = ctrl.HandleItemRequest(reqMultiType, today);
         AssertTrue(jsonMultiType.Contains("\"total_active_projects\":1"),
-            "專案類型複選測試：1.Standard,2.Professional 應成功匹配 Standard 專案");
+            "專案類型 9 大類複選測試：應成功匹配專案");
+
+        // 新增：NormalizeTeamCode 團隊代碼解析測試
+        AssertTrue(ArasProjectRepository.NormalizeTeamCode("32_CHAR_GUID_TPS", "TPS 顧問團隊") == "TPS", "NormalizeTeamCode：keyed_name 包含 TPS 應歸類為 TPS");
+        AssertTrue(ArasProjectRepository.NormalizeTeamCode("32_CHAR_GUID_ICS", "ICS 顧問團隊") == "ICS", "NormalizeTeamCode：keyed_name 包含 ICS 應歸類為 ICS");
+        AssertTrue(ArasProjectRepository.NormalizeTeamCode("32_CHAR_GUID_PMO", "PMO 專案管理處") == "PMO", "NormalizeTeamCode：keyed_name 包含 PMO 應歸類為 PMO");
+        AssertTrue(ArasProjectRepository.NormalizeTeamCode("32_CHAR_GUID_SUS", "SUS 永續服務處") == "SUS", "NormalizeTeamCode：keyed_name 包含 SUS 應歸類為 SUS");
+        AssertTrue(ArasProjectRepository.NormalizeTeamCode("32_CHAR_GUID_SHS", "SHS 顧問團隊") == "SHS", "NormalizeTeamCode：keyed_name 包含 SHS 應歸類為 SHS");
+        AssertTrue(ArasProjectRepository.NormalizeTeamCode("32_CHAR_GUID_OTHER", "CDS 產品處") == "Other", "NormalizeTeamCode：非五大團隊應歸類為 Other");
+
+        // 新增：動態狀態 (state) 篩選聯動測試
+        Item reqAllState = new Item("Method", "PMO_ProjectAnalytics_API");
+        reqAllState.setProperty("route", "/api/v1/dashboard/team-summary");
+        reqAllState.setProperty("state", "ALL");
+        string jsonAllState = ctrl.HandleItemRequest(reqAllState, today);
+        AssertTrue(jsonAllState.Contains("\"status\":\"success\"") && jsonAllState.Contains("\"total_projects\":1"),
+            "動態狀態篩選測試：state=ALL 應正確統計專案數量");
     }
 }

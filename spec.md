@@ -19,8 +19,8 @@
     首頁載入時提供極速輕量端點 `/api/v1/dashboard/team-summary`，僅檢索 Project 主檔並聚合團隊專案數，完全繞過龐大的 WBS 與 Activity2 關聯運算，將首頁渲染時間降至毫秒級。
 - **客戶端 (Frontend)**：掛載於 Aras TOC (Table of Contents `Portfolio` / `Dashboards` 類別) 的 **獨立全域多專案儀表板 (`PMO_ProgressDashboard.html`)**。
   - 採用遵循 S.O.L.I.D 原則之原生模組化 JavaScript + 響應式現代深淺雙模 UI 與原生 SVG/Canvas 互動圖表引擎（零外部網路依賴，確保內網與 iframe 嵌入 100% 穩定執行）。
-  - 首頁優先載入「各執行團隊 (team_id) 啟動中 (Active) 專案數量長條統計圖」，點擊長條圖各團隊色塊即漸進展開該團隊之多專案進度詳細分析。
-  - 專案類型 (`cn_project_type`) 支援複選 (OR 比對)，預設選中 `1.Standard` 與 `2.Professional`；專案狀態 (`state`) 預設為 `Active`；執行團隊選項清單包含 `TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`。
+  - 首頁優先載入「各執行團隊 (team_id) 專案數量長條統計圖」，長條圖統計結果即時聯動篩選條件（依專案狀態、專案類型、服務中心等動態聚合計算），點擊長條圖各團隊色塊即漸進展開該團隊之多專案進度詳細分析。
+  - 專案類型 (`cn_project_type`) 支援 9 大完整類型複選 (OR 比對：`1.Standard`, `2.Professional`, `3.Upgrade`, `4.Customize`, `5.Product`, `6.Technical`, `7.Marketing`, `8.EmployeeTraining`, `F.Misc`)，預設選中 `1.Standard` 與 `2.Professional`；專案狀態 (`state`) 預設為 `Active`；執行團隊選項清單包含 `TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`（後端支援以 `team_id/@keyed_name` 精確解析真實團隊代碼，避免將 GUID 誤判為 Other）。
   - 總覽表取消獨立下鑽操作欄位，將下鑽連結整合至第一欄專案編號。
 
 ### 1.2 架構圖
@@ -569,7 +569,7 @@ classDiagram
 
 | RESTful 路徑 (`route`) | 對應 Action 別名 | 查詢參數 | 回應內容摘要 |
 | :--- | :--- | :--- | :--- |
-| `GET /api/v1/dashboard/team-summary` | `GET_TEAM_SUMMARY` | `state` (預設 `Active`), `project_type` (預設 `1.Standard,2.Professional`), `territory`, `keyword` | **首頁極速統計**：僅查詢 Project 主檔並依 `team_id` (`TPS`, `ICS`, `PMO`, `SUS`, `SHS`, `Other`) 分組彙整啟動中專案數，完全不讀取 WBS 與任務，數十毫秒秒開首頁長條圖 |
+| `GET /api/v1/dashboard/team-summary` | `GET_TEAM_SUMMARY` | `state` (預設 `Active`, 支援 `ALL`/`closed`/`pending`), `project_type` (支援 9 項複選), `territory`, `keyword` | **首頁極速統計**：僅查詢 Project 主檔並依 `team_id/@keyed_name` 解析分組彙整各執行團隊專案數，統計結果完全聯動篩選條件，數十毫秒秒開首頁長條圖 |
 | `GET /api/v1/dashboard/summary` | `GET_PORTFOLIO_SUMMARY` | `state` (預設 `Active`), `project_type` (複選 OR), `territory`, `team_id`, `pm_id`, `health_status`, `keyword` | 全公司/多專案 KPI 彙總、紅黃綠燈 (`rag_status`) 統計、EVM 彙總、`team_performance`、`pm_performance`、含 `Ph 1~12` 與進度狀態之專案清單 |
 | `GET /api/v1/dashboard/team/{team_id}` | `GET_TEAM_ANALYSIS` | `team_id`, `state` | 指定執行團隊 (`team_id`) 之專案進度、RAG 燈號分佈、PM 績效與風險專案明細 |
 | `GET /api/v1/dashboard/pm/{pm_id}` | `GET_PM_ANALYSIS` | `pm_id`, `state` | 指定專案經理 (`owned_by_id`) 負責之所有專案完成率、時程偏差、EVM 與狀態統計 |

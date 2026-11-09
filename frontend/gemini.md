@@ -3,11 +3,11 @@
 ## 1. 領域職責
 負責在 Aras Innovator 12 SP9 的 TOC View (Table of Contents) 中呈現「PMO 專案進度狀態分析統計儀表板 (Dashboard)」，並對齊 `C:\TEST\pmomonthly` 的視覺化風格與資料結構，提供：
 1. **全域多專案總覽 (`/api/v1/dashboard/summary` & `/api/v1/dashboard/team-summary`)**：
-   - **首頁極速概覽**：載入時先呼叫 `/api/v1/dashboard/team-summary`，快速展示「執行團隊 (team_id) Active 專案數量長條統計圖」與首頁摘要，避免大數據造成白屏卡頓。
+   - **首頁極速概覽與篩選聯動**：載入時先呼叫 `/api/v1/dashboard/team-summary`，動態展示「各執行團隊專案數量長條統計圖」，長條圖統計結果即時聯動篩選條件（非寫死為 Active），標題與計數徽章動態依目前狀態更新。
    - **統計圖色塊互動展開**：長條圖色塊具備點擊互動，使用者點擊特定團隊色塊（如 TPS, ICS, PMO, SUS, SHS, Other）時，漸進向下展開該團隊詳細分析與多專案明細列表。
    - **多維度篩選器規格**：
-     - 專案狀態 (`state`)：預設為 `Active`。
-     - 專案類型 (`cn_project_type`)：支援複選 (OR 比對)，預設選中 `1.Standard` 與 `2.Professional`。
+     - 專案狀態 (`state`)：預設為 `Active`，支援 `ALL`、`closed`、`pending`。
+     - 專案類型 (`cn_project_type`)：採用下拉複選元件提供 9 大類型 (`1.Standard`, `2.Professional`, `3.Upgrade`, `4.Customize`, `5.Product`, `6.Technical`, `7.Marketing`, `8.EmployeeTraining`, `F.Misc`)，預設選中 `1.Standard` 與 `2.Professional`。
      - 執行團隊 (`team_id`)：選單更新為 `ALL`、`TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`。
    - **多專案進度明細列表**：取消獨立「下鑽操作」欄位，將該欄之「階段與成員分析」下鑽連結直接整併至第一欄「專案編號」，點擊專案編號即可切換至該專案下鑽視圖。
 2. **單一專案下鑽分析 (`/api/v1/dashboard/project/{proj_num}` & `/api/v1/dashboard/wbs/{proj_num}`)**:

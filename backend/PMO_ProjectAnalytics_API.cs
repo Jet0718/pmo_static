@@ -1484,6 +1484,23 @@ public class WorkloadAggregator : IWorkloadAggregator
 /// </summary>
 public class ArasProjectRepository : IProjectRepository
 {
+    /// <summary>
+    /// 正規化執行團隊代碼：優先比對 TeamName / keyed_name，若無則比對 TeamId
+    /// 精確歸納至 TPS, ICS, PMO, SUS, SHS，無法對應者歸為 Other
+    /// </summary>
+    public static string NormalizeTeamCode(string teamName, string teamId)
+    {
+        string s = (!string.IsNullOrEmpty(teamName) ? teamName : (teamId ?? "")).Trim();
+        if (string.IsNullOrEmpty(s)) return "Other";
+        string upper = s.ToUpperInvariant();
+        if (upper.Contains("TPS")) return "TPS";
+        if (upper.Contains("ICS")) return "ICS";
+        if (upper.Contains("PMO")) return "PMO";
+        if (upper.Contains("SUS")) return "SUS";
+        if (upper.Contains("SHS")) return "SHS";
+        return "Other";
+    }
+
     private readonly Innovator _inn;
 
     public ArasProjectRepository(Innovator inn)
@@ -1555,19 +1572,7 @@ public class ArasProjectRepository : IProjectRepository
             {
                 qry.setProperty("territory", SanitizeInput(query.TerritoryFilter));
             }
-            if (!string.IsNullOrEmpty(query.TeamId) &&
-                !string.Equals(query.TeamId, "ALL", System.StringComparison.OrdinalIgnoreCase))
-            {
-                if (string.Equals(query.TeamId, "Other", System.StringComparison.OrdinalIgnoreCase))
-                {
-                    qry.setProperty("team_id", "'TPS','ICS','PMO','SUS','SHS'");
-                    qry.setPropertyAttribute("team_id", "condition", "not in");
-                }
-                else
-                {
-                    qry.setProperty("team_id", SanitizeInput(query.TeamId));
-                }
-            }
+
             if (!string.IsNullOrEmpty(query.PmId) &&
                 !string.Equals(query.PmId, "ALL", System.StringComparison.OrdinalIgnoreCase))
             {
@@ -1589,6 +1594,15 @@ public class ArasProjectRepository : IProjectRepository
         for (int i = 0; i < count; i++)
         {
             ProjectRecord rec = MapItemToProjectRecord(res.getItemByIndex(i));
+            if (query != null && !string.IsNullOrEmpty(query.TeamId) &&
+                !string.Equals(query.TeamId, "ALL", System.StringComparison.OrdinalIgnoreCase))
+            {
+                string normTeam = NormalizeTeamCode(rec.TeamName, rec.TeamId);
+                if (!string.Equals(normTeam, query.TeamId.Trim(), System.StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+            }
             if (query != null && !string.IsNullOrEmpty(query.Keyword))
             {
                 string kw = query.Keyword.Trim().ToLowerInvariant();
@@ -2125,15 +2139,16 @@ public class ProjectAnalyticsController
                 { "Other", 0 }
             };
 
-        int totalActive = 0;
+        int totalProjects = 0;
         for (int i = 0; i < projects.Count; i++)
         {
             ProjectRecord p = projects[i];
-            totalActive++;
-            string tId = (p.TeamId ?? "").Trim();
-            if (teamCounts.ContainsKey(tId))
+            totalProjects++;
+            // 透過 NormalizeTeamCode 解析 GUID 或 keyed_name，精確歸類六大團隊
+            string normTeam = ArasProjectRepository.NormalizeTeamCode(p.TeamId, p.TeamName);
+            if (teamCounts.ContainsKey(normTeam))
             {
-                teamCounts[tId]++;
+                teamCounts[normTeam]++;
             }
             else
             {
@@ -2141,13 +2156,14 @@ public class ProjectAnalyticsController
             }
         }
 
-        // 組裝高速回應 JSON
+        // 組裝高速回應 JSON (支援動態狀態篩選)
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         sb.Append("{");
         sb.Append("\"status\":\"success\",");
         sb.Append("\"route\":\"/api/v1/dashboard/team-summary\",");
         sb.Append("\"as_of_date\":\"").Append(asOfDate.ToString("yyyy-MM-dd")).Append("\",");
-        sb.Append("\"total_active_projects\":").Append(totalActive).Append(",");
+        sb.Append("\"total_projects\":").Append(totalProjects).Append(",");
+        sb.Append("\"total_active_projects\":").Append(totalProjects).Append(",");
         sb.Append("\"teams\":[");
 
         string[] teamKeys = new string[] { "TPS", "ICS", "PMO", "SUS", "SHS", "Other" };
@@ -2161,6 +2177,7 @@ public class ProjectAnalyticsController
             sb.Append("{");
             sb.Append("\"team_id\":\"").Append(key).Append("\",");
             sb.Append("\"team_name\":\"").Append(teamNames[k]).Append("\",");
+            sb.Append("\"project_count\":").Append(teamCounts[key]).Append(",");
             sb.Append("\"active_count\":").Append(teamCounts[key]).Append(",");
             sb.Append("\"color\":\"").Append(teamColors[k]).Append("\"");
             sb.Append("}");

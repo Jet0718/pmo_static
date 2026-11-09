@@ -42,12 +42,11 @@
 
 ## 5. 極速統計與過濾優化規範 (Performance & Filter Rules)
 1. **首頁極速端點 (`/api/v1/dashboard/team-summary`)**：
-   - 首頁載入專用，僅透過 AML 檢索 `Project` ItemType 基礎欄位（或直接分組查詢）。
-   - **嚴禁**在 team-summary 中載入 `WBS Element`、`Sub WBS` 或 `Activity2`，確保首頁能在數十毫秒內完成執行團隊 Active 專案數統計。
-2. **專案類型複選 (OR) 支援**：
-   - 參數 `project_type` 支援多值逗號分隔（如 `1.Standard,2.Professional`）。
-   - 組裝 AML 時轉譯為 `<cn_project_type condition="in">'1.Standard','2.Professional'</cn_project_type>`，各值均須嚴格經過單引號安全轉義 (`Replace("'", "''")`)。
-3. **執行團隊標準代碼**：
-   - 標準支援執行團隊：`TPS`, `ICS`, `PMO`, `SUS`, `SHS`, `Other`。
-4. **預設生命週期狀態**：
-   - 預設查詢狀態統一為 `Active`，僅當明確傳入 `ALL` 或其他狀態時方予放寬。
+   - 首頁載入專用，僅透過 AML 檢索 `Project` ItemType 基礎欄位，嚴禁載入 WBS 與任務。
+   - **篩選條件動態聯動**：完整套用 `state` (若為 ALL 則統計全部狀態)、`project_type`、`territory`、`keyword`，非寫死為 Active。
+2. **團隊真實代碼識別 (Keyed Name 解析)**：
+   - 在 Aras 中 `Project.team_id` 儲存為 32 碼 GUID，真實團隊代碼存於 `item.getPropertyAttribute("team_id", "keyed_name")`。
+   - 後端必須以 `NormalizeTeamCode` 優先比對 `TeamName`（若無則回退 `TeamId`），正確歸納至 `TPS`、`ICS`、`PMO`、`SUS`、`SHS`，其餘團隊方歸入 `Other`。
+3. **專案類型 9 項複選 (OR) 支援**：
+   - 完整支援 9 大專案類型：`1.Standard`, `2.Professional`, `3.Upgrade`, `4.Customize`, `5.Product`, `6.Technical`, `7.Marketing`, `8.EmployeeTraining`, `F.Misc`。
+   - 傳遞多值以逗號分隔，組裝 AML 時轉譯為 `<cn_project_type condition="in">'1.Standard','2.Professional'</cn_project_type>`。
