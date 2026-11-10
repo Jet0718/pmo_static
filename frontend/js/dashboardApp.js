@@ -171,7 +171,10 @@
         '</div>' +
         '<div class="pmo-card">' +
           '<div class="pmo-card-header"><h3>各執行團隊 (Team) 與專案經理 (PM) 績效對比</h3></div>' +
-          PMOCharts.renderGroupComparisonHtml(data.team_performance || [], "team_name") +
+          PMOCharts.renderGroupComparisonHtml(
+            (data.pm_performance && data.pm_performance.length > 0) ? data.pm_performance : (data.team_performance || []),
+            (data.pm_performance && data.pm_performance.length > 0) ? "pm_name" : "team_name"
+          ) +
         '</div>' +
       '</div>';
 

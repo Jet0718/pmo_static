@@ -111,11 +111,11 @@ function runE2ETests() {
   const interactiveDom = runChromeDumpDom(testHtmlPath);
   if (fs.existsSync(testHtmlPath)) fs.unlinkSync(testHtmlPath);
 
-  // 驗證是否展開了 TPS 詳細明細
-  if (!interactiveDom.includes("次世代 BDM 智慧製造整合專案")) {
-    throw new Error("點擊 TPS 色塊後未正確向下展開 TPS 專案明細");
+  // 驗證是否展開了 TPS 詳細明細與依專案經理 (PM) 統計之績效對比
+  if (!interactiveDom.includes("次世代 BDM 智慧製造整合專案") || !interactiveDom.includes("陳建宏") || !interactiveDom.includes("(1 專案)")) {
+    throw new Error("點擊 TPS 色塊後未正確向下展開 TPS 專案明細或 PM 績效統計");
   }
-  console.log(" [PASS] 1.5 點擊團隊長條色塊成功向下展開該團隊詳細明細");
+  console.log(" [PASS] 1.5 點擊團隊長條色塊成功向下展開該團隊詳細明細與各專案經理 (PM) 績效統計");
 
   // 驗證需求 5：多專案總覽表取消下鑽操作欄位，併在第一欄專案編號超連結
   if (interactiveDom.includes("<th>下鑽操作</th>") || interactiveDom.includes("階段與成員分析 &rarr;")) {

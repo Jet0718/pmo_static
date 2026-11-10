@@ -56,6 +56,8 @@
 - Aras IOM 查詢 Project 時，若 `getPropertyAttribute("team_id", "keyed_name")` 未回傳或回傳空，後端必須透過 Team 快取字典（包含預載之 BDM Team GUID 映射表與 `Team` ItemType 查詢）反查真實團隊代碼，避免所有專案誤入 Other。
 - `NormalizeTeamCode(teamName, teamId)` 必須兼容雙參數無序傳入，同時比對兩者與 GUID 字典。
 
-## 5. Activity2 任務指派人與 WBS 排序規範
-- **指派人取得**：`GetActivitiesWithAssignments` 中，首要讀取 `managed_by_id` 作為 `AssigneeId` / `AssigneeName`，若為空才回退至 `owned_by_id`。
+## 5. Activity2 任務指派人、里程碑扣除與 WBS 排序規範
+- **指派人取得 (`Activity2.managed_by_id` 優先)**：`GetActivitiesWithAssignments` 中，首要讀取 `managed_by_id`（及其 `keyed_name` 屬性或 `Identity` 反查）作為 `AssigneeId` / `AssigneeName`；僅當 `managed_by_id` 為空時，才參考 `Activity2 Assignment` 或回退至 `owned_by_id`，嚴禁覆蓋已存在之 `managed_by_id`。
+- **扣除里程碑任務 (`is_milestone == '1'`)**：`WorkloadAggregator.AggregateByAssignee` 統計成員負荷時，必須將 `act.IsMilestone == true` 的里程碑任務扣除忽略不計。
+- **PM 績效排序**：`BuildGroupPerformanceJson` 依專案數量 (`project_count`) 降冪排序。
 - **WBS 階段排序**：`AnalyzeMainStages` 回傳之主階段清單必須依據 `StageName` 進行自然升冪排序。
