@@ -575,7 +575,7 @@ classDiagram
 | `GET /api/v1/dashboard/pm/{pm_id}` | `GET_PM_ANALYSIS` | `pm_id`, `state` | 指定專案經理 (`owned_by_id`) 負責之所有專案完成率、時程偏差、EVM 與狀態統計 |
 | `GET /api/v1/dashboard/project/{proj_num}` | `GET_PROJECT_DETAIL` | `proj_num` (專案編號或 ID) | 單一專案深度分析：基本與客製屬性 (`cn_*`/`bcs_*`)、`Ph 1~12` 階段燈號、主階段 `WBS Element` 達成率與時程偏差天數、里程碑進度、該專案成員任務負荷統計 |
 | `GET /api/v1/dashboard/wbs/{proj_num}` | `GET_WBS_ANALYSIS` | `proj_num` | 單一專案完整 `WBS Element` 遞迴樹狀結構 (`wbs_tree`)、各層級完成度、SPI/CPI、時程偏差與下轄任務狀態 |
-| `GET /api/v1/dashboard/assignees` | `GET_ASSIGNEE_WORKLOAD` | `proj_num` (選填), `team_id` (選填), `state` | 跨專案或單一專案之成員 (`Assignee`) 任務負荷排行榜：總任務、已完成、進行中、未開始、逾期數、要徑任務數、預估工時 (`work_est`)、實際工時 (`actual_work`)、完成率 (%) 與負荷等級 |
+| `GET /api/v1/dashboard/assignees` | `GET_ASSIGNEE_WORKLOAD` | `proj_num` (選填), `team_id` (選填), `state` | 跨專案或單一專案之成員 (`Activity2.managed_by_id`) 任務負荷排行榜（扣除 `is_milestone == '1'` 里程碑任務忽略不計）：總任務、已完成、進行中、未開始、逾期數、要徑任務數、預估工時 (`work_est`)、實際工時 (`actual_work`)、完成率 (%) 與負荷等級 |
 | `GET /api/v1/health` | `HEALTH_CHECK` | 無 | 系統健康檢查與版本資訊 |
 
 ---

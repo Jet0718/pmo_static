@@ -1418,7 +1418,8 @@ public class WorkloadAggregator : IWorkloadAggregator
         for (int i = 0; i < activities.Count; i++)
         {
             ActivityRecord act = activities[i];
-            if (act == null) continue;
+            // 扣除里程碑任務 (is_milestone == '1') 忽略不計，僅統計實際工作任務之指派成員
+            if (act == null || act.IsMilestone) continue;
 
             string assigneeId = string.IsNullOrEmpty(act.AssigneeId) ? "UNASSIGNED" : act.AssigneeId;
             string assigneeName = string.IsNullOrEmpty(act.AssigneeName)
@@ -1818,6 +1819,11 @@ public class ArasProjectRepository : IProjectRepository
         }
 
         System.Collections.Generic.List<string> actIds = new System.Collections.Generic.List<string>();
+        System.Collections.Generic.Dictionary<string, string> fallbackOwnerIdMap =
+            new System.Collections.Generic.Dictionary<string, string>();
+        System.Collections.Generic.Dictionary<string, string> fallbackOwnerNameMap =
+            new System.Collections.Generic.Dictionary<string, string>();
+
         int count = actRes.getItemCount();
         for (int i = 0; i < count; i++)
         {
@@ -1828,7 +1834,8 @@ public class ArasProjectRepository : IProjectRepository
             rec.Name = item.getProperty("name", "");
             rec.State = item.getProperty("state", "");
             rec.Status = item.getProperty("status", "");
-            rec.IsMilestone = item.getProperty("is_milestone", "0") == "1";
+            string msRaw = item.getProperty("is_milestone", "0");
+            rec.IsMilestone = (msRaw == "1" || string.Equals(msRaw, "true", System.StringComparison.OrdinalIgnoreCase));
             rec.IsCritical = item.getProperty("is_critical", "0") == "1";
             rec.PercentCompl = ParseDouble(item.getProperty("percent_compl", "0"), 0.0);
             rec.SchedStart = ParseDate(item.getProperty("date_start_sched", ""));
@@ -1841,15 +1848,19 @@ public class ArasProjectRepository : IProjectRepository
             rec.EarnedValue = ParseDouble(item.getProperty("earned_value", "0"), 0.0);
             rec.PlannedValue = ParseDouble(item.getProperty("planned_value", "0"), 0.0);
 
+            // 優先讀取 Activity2.managed_by_id 作為任務指派對象 (Assignee)
+            string managedId = item.getProperty("managed_by_id", "");
+            string managedName = item.getPropertyAttribute("managed_by_id", "keyed_name", "");
             string ownerId = item.getProperty("owned_by_id", "");
             string ownerName = item.getPropertyAttribute("owned_by_id", "keyed_name", "");
-            if (string.IsNullOrEmpty(ownerId))
+
+            rec.AssigneeId = managedId;
+            rec.AssigneeName = managedName;
+            if (!string.IsNullOrEmpty(rec.Id) && !string.IsNullOrEmpty(ownerId))
             {
-                ownerId = item.getProperty("managed_by_id", "");
-                ownerName = item.getPropertyAttribute("managed_by_id", "keyed_name", "");
+                fallbackOwnerIdMap[rec.Id] = ownerId;
+                fallbackOwnerNameMap[rec.Id] = ownerName;
             }
-            rec.AssigneeId = ownerId;
-            rec.AssigneeName = ownerName;
             rec.TeamId = item.getProperty("team_id", "");
 
             actList.Add(rec);
@@ -1919,10 +1930,70 @@ public class ArasProjectRepository : IProjectRepository
                 }
                 for (int i = 0; i < actList.Count; i++)
                 {
-                    if (asgnIdMap.ContainsKey(actList[i].Id))
+                    // 僅當 Activity2.managed_by_id 為空時，才由 Activity2 Assignment 補充指派成員，絕不覆蓋 managed_by_id
+                    if (string.IsNullOrEmpty(actList[i].AssigneeId) && asgnIdMap.ContainsKey(actList[i].Id))
                     {
                         actList[i].AssigneeId = asgnIdMap[actList[i].Id];
                         actList[i].AssigneeName = asgnNameMap[actList[i].Id];
+                    }
+                }
+            }
+
+            // 若 managed_by_id 與 Activity2 Assignment 皆為空，最後才回退至 owned_by_id
+            for (int i = 0; i < actList.Count; i++)
+            {
+                if (string.IsNullOrEmpty(actList[i].AssigneeId) &&
+                    !string.IsNullOrEmpty(actList[i].Id) &&
+                    fallbackOwnerIdMap.ContainsKey(actList[i].Id))
+                {
+                    actList[i].AssigneeId = fallbackOwnerIdMap[actList[i].Id];
+                    actList[i].AssigneeName = fallbackOwnerNameMap[actList[i].Id];
+                }
+            }
+
+            // 若 AssigneeId 有值但 AssigneeName 為空，批次反查 Identity 補齊 keyed_name / name
+            System.Collections.Generic.List<string> missingIdentityIds = new System.Collections.Generic.List<string>();
+            for (int i = 0; i < actList.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(actList[i].AssigneeId) && string.IsNullOrEmpty(actList[i].AssigneeName))
+                {
+                    string safeId = "'" + SanitizeInput(actList[i].AssigneeId) + "'";
+                    if (!missingIdentityIds.Contains(safeId))
+                    {
+                        missingIdentityIds.Add(safeId);
+                    }
+                }
+            }
+            if (missingIdentityIds.Count > 0)
+            {
+                Item idQry = this._inn.newItem("Identity", "get");
+                idQry.setAttribute("select", "id,keyed_name,name");
+                idQry.setAttribute("where", "[IDENTITY].id IN (" + string.Join(",", missingIdentityIds.ToArray()) + ")");
+                Item idRes = idQry.apply();
+                if (!idRes.isError())
+                {
+                    System.Collections.Generic.Dictionary<string, string> idNameMap =
+                        new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
+                    int idCnt = idRes.getItemCount();
+                    for (int k = 0; k < idCnt; k++)
+                    {
+                        Item idItem = idRes.getItemByIndex(k);
+                        string iid = idItem.getID();
+                        string iName = idItem.getProperty("keyed_name", "");
+                        if (string.IsNullOrEmpty(iName)) iName = idItem.getProperty("name", "");
+                        if (!string.IsNullOrEmpty(iid) && !string.IsNullOrEmpty(iName))
+                        {
+                            idNameMap[iid] = iName;
+                        }
+                    }
+                    for (int i = 0; i < actList.Count; i++)
+                    {
+                        if (!string.IsNullOrEmpty(actList[i].AssigneeId) &&
+                            string.IsNullOrEmpty(actList[i].AssigneeName) &&
+                            idNameMap.ContainsKey(actList[i].AssigneeId))
+                        {
+                            actList[i].AssigneeName = idNameMap[actList[i].AssigneeId];
+                        }
                     }
                 }
             }
@@ -2548,11 +2619,23 @@ public class ProjectAnalyticsController
             groups[key].Add(p);
         }
 
+        System.Collections.Generic.List<string> sortedKeys =
+            new System.Collections.Generic.List<string>(groups.Keys);
+        sortedKeys.Sort(delegate(string a, string b)
+        {
+            int cCmp = groups[b].Count.CompareTo(groups[a].Count);
+            if (cCmp != 0) return cCmp;
+            return string.Compare(a, b, System.StringComparison.Ordinal);
+        });
+
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         sb.Append("[");
         bool first = true;
-        foreach (System.Collections.Generic.KeyValuePair<string, System.Collections.Generic.List<ProjectSummaryDto>> kv in groups)
+        for (int kIdx = 0; kIdx < sortedKeys.Count; kIdx++)
         {
+            string groupKey = sortedKeys[kIdx];
+            System.Collections.Generic.KeyValuePair<string, System.Collections.Generic.List<ProjectSummaryDto>> kv =
+                new System.Collections.Generic.KeyValuePair<string, System.Collections.Generic.List<ProjectSummaryDto>>(groupKey, groups[groupKey]);
             if (!first) sb.Append(",");
             first = false;
 

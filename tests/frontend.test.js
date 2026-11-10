@@ -228,3 +228,35 @@ test("7. 單一專案 WBS 階段應嚴格依名稱自然排序升冪，且本專
   assert.ok(pos40 < pos50, "40 測試驗證 必須排在 50 上線準備 之前");
   assert.ok(pos50 < pos60, "50 上線準備 必須排在 60 系統上線 之前");
 });
+
+test("8. 各執行團隊與專案經理績效對比：展開團隊時應依不同的專案經理 (pm_performance) 作績效統計", () => {
+  const fakeSummary = {
+    summary: { total_projects: 18, active_projects: 18, closed_projects: 0, avg_progress: 59.6, total_team_count: 1, total_pm_count: 3, total_overdue_tasks: 205 },
+    rag_status: { green_count: 0, amber_count: 0, red_count: 18, green_percent: 0, amber_percent: 0, red_percent: 100 },
+    evm_summary: { avg_spi: 1.39, avg_cpi: 1.38, total_planned_value: 17169, total_earned_value: 16108, total_actual_cost: 25963.2 },
+    team_performance: [
+      { team_id: "TPS", team_name: "TPS", project_count: 18, avg_progress: 59.6, avg_spi: 1.39, avg_cpi: 1.38 }
+    ],
+    pm_performance: [
+      { pm_id: "PM1", pm_name: "陸睿旭 Andrew", project_count: 6, avg_progress: 65.2, avg_spi: 1.25, avg_cpi: 1.30 },
+      { pm_id: "PM2", pm_name: "張國倫 Allen.chang", project_count: 5, avg_progress: 52.0, avg_spi: 1.10, avg_cpi: 1.15 },
+      { pm_id: "PM3", pm_name: "羅仁 Jet", project_count: 7, avg_progress: 61.0, avg_spi: 1.65, avg_cpi: 1.60 }
+    ],
+    projects: []
+  };
+  const fakeTeamSummary = {
+    total_projects: 43,
+    teams: [{ team_id: "TPS", team_name: "TPS", active_count: 18, project_count: 18, color: "#2563eb" }]
+  };
+  const fakeStore = {
+    teamSummaryData: fakeTeamSummary,
+    isDetailExpanded: true,
+    selectedTeamForDrill: "TPS",
+    filters: { state: "Active", team_id: "TPS" }
+  };
+  const html = PMODashboardApp.renderPortfolioSummaryView(fakeSummary, fakeStore);
+  assert.ok(html.includes("陸睿旭 Andrew") && html.includes("(6 專案)"), "績效對比卡片應包含陸睿旭 Andrew (6 專案)");
+  assert.ok(html.includes("張國倫 Allen.chang") && html.includes("(5 專案)"), "績效對比卡片應包含張國倫 Allen.chang (5 專案)");
+  assert.ok(html.includes("羅仁 Jet") && html.includes("(7 專案)"), "績效對比卡片應包含羅仁 Jet (7 專案)");
+  assert.ok(!html.includes("(18 專案)"), "績效對比卡片不應只顯示單一團隊 TPS (18 專案)，而應依不同 PM 統計");
+});

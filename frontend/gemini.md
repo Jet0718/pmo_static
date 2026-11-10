@@ -30,6 +30,7 @@
 - `#filter-team` 篩選下拉選單與長條圖標籤一律使用純淨代碼：`TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`，嚴禁附加「XX團隊」等冗餘中文。
 - 團隊長條圖各長條色塊標籤、提示文字及右側統計徽章，均依據當前篩選條件動態聯動計算。
 
-## 5. WBS 階段自然排序與成員負荷展示
-- `renderProjectDetailView` 與 `renderWbsStageDeviationChart` 必須對 `wbs_items` 依名稱進行自然升冪排序（如 `10 啟動階段` &rarr; `20 需求分析`）。
-- 單一專案成員負荷與全域成員負荷圖表均正確渲染 `managed_by_id` 統計之成員。
+## 5. WBS 階段自然排序、PM 績效對比與成員負荷展示
+- **PM 績效統計對比**：多專案總覽之「各執行團隊 (Team) 與專案經理 (PM) 績效對比」卡片必須渲染 `data.pm_performance`（按 `pm_name` 分組），依不同專案經理作績效統計。
+- **WBS 階段自然排序**：`renderProjectDetailView` 與 `renderWbsStageDeviationChart` 必須對 `wbs_items` 依名稱進行自然升冪排序（如 `10 啟動階段` &rarr; `20 需求分析`）。
+- **成員負荷扣除里程碑並呈現所有指派成員**：單一專案成員負荷與全域成員負荷圖表均正確渲染 `Activity2.managed_by_id` 統計之所有指派成員，且扣除 `is_milestone == '1'` 里程碑任務。

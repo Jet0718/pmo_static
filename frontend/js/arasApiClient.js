@@ -815,6 +815,8 @@
       };
     });
 
+    teamPerf.sort(function (a, b) { return b.project_count - a.project_count; });
+
     var pmPerf = Object.keys(pmMap).map(function (k) {
       var m = pmMap[k];
       return {
@@ -829,6 +831,7 @@
         red_count: m.red_count
       };
     });
+    pmPerf.sort(function (a, b) { return b.project_count - a.project_count; });
 
     return {
       status: "success",

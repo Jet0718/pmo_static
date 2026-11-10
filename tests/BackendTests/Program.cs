@@ -434,5 +434,23 @@ public class Program
         System.Collections.Generic.List<AssigneeWorkloadDto> aggList = workloadAgg.AggregateByAssignee(new System.Collections.Generic.List<ActivityRecord> { actWithBoth }, today);
         AssertTrue(aggList.Count == 1 && aggList[0].AssigneeName == "張國倫 Allen.chang",
             "Assignee 負荷統計：應以任務實際負責人 (managed_by_id) 作為統計對象");
+
+        // 新增測試：模擬 2348 上海栎智科技PLM项目 (5位成員，扣除 Milestone 任務羅仁後應計為 4 位：武軍、袁浩、練馨璐、胡彬)
+        System.Collections.Generic.List<ActivityRecord> proj2348Acts = new System.Collections.Generic.List<ActivityRecord>
+        {
+            new ActivityRecord { Id = "2348_1", ProjNum = 2348, Name = "專案啟動與藍圖", AssigneeId = "U_WU", AssigneeName = "武軍 Jun Wu", IsMilestone = false, State = "Complete", PercentCompl = 100 },
+            new ActivityRecord { Id = "2348_2", ProjNum = 2348, Name = "BOM模組導入", AssigneeId = "U_YUAN", AssigneeName = "袁浩", IsMilestone = false, State = "Active", PercentCompl = 60 },
+            new ActivityRecord { Id = "2348_3", ProjNum = 2348, Name = "變更流程設定", AssigneeId = "U_LIAN", AssigneeName = "練馨璐", IsMilestone = false, State = "Active", PercentCompl = 50 },
+            new ActivityRecord { Id = "2348_4", ProjNum = 2348, Name = "ERP介面開發", AssigneeId = "U_HU", AssigneeName = "胡彬", IsMilestone = false, State = "Active", PercentCompl = 40 },
+            new ActivityRecord { Id = "2348_MS", ProjNum = 2348, Name = "階段里程碑審查", AssigneeId = "U_LUO", AssigneeName = "羅仁 Jet", IsMilestone = true, State = "Active", PercentCompl = 0 }
+        };
+        System.Collections.Generic.List<AssigneeWorkloadDto> agg2348 = workloadAgg.AggregateByAssignee(proj2348Acts, today);
+        bool hasLuo = false;
+        for (int i = 0; i < agg2348.Count; i++)
+        {
+            if (agg2348[i].AssigneeName.Contains("羅仁")) hasLuo = true;
+        }
+        AssertTrue(agg2348.Count == 4 && !hasLuo,
+            "專案 2348 成員負荷統計：扣除 Milestone 任務 (羅仁) 忽略不計後，應精確計為 4 位成員 (武軍、袁浩、練馨璐、胡彬)");
     }
 }

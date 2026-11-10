@@ -20,7 +20,7 @@
    - **Ph 1 ~ Ph 12 階段燈號矩陣**：直接讀取並視覺化 `Project` 上的 `percent_compl_1~12` 與 `status_1~12` 顏色狀態（含 Hex 色碼自動轉譯圓點標籤）。
    - **WBS 樹狀階段與時程偏差分析**：透過 `Sub WBS` 與 `WBS Activity2` 遞迴剖析各主階段與里程碑之完成度 (%)、應有進度、時程變異 (`cn_sv`)、**時程偏差天數 (Schedule Variance Days)** 與任務狀態分佈（已完成 / 進行中 / 未開始 / 逾期）。
 3. **專案成員 (`Assignee`) 任務負荷與完成狀態統計 (`/api/v1/dashboard/assignees`)**
-   - 聚合 `Activity2 Assignment` 與 `Activity2.owned_by_id`，統計每位專案成員之指派任務總數、已完成數、進行中數、未開始數、逾期任務數、要徑任務數、預估工時 (`work_est`)、實際工時 (`actual_work`) 與個人完成率 (%)。
+   - 以 `Activity2.managed_by_id` 為任務指派對象（若為空才回退至 `Activity2 Assignment` 或 `owned_by_id`），並**自動扣除里程碑任務 (`is_milestone == '1'`) 忽略不計**，精準統計每位專案成員之指派工作任務總數、已完成數、進行中數、未開始數、逾期任務數、要徑任務數、預估工時 (`work_est`)、實際工時 (`actual_work`) 與個人完成率 (%)。
 
 ---
 
