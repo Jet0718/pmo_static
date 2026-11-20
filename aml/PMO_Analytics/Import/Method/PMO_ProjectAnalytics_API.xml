@@ -1,6 +1,6 @@
 ﻿<AML>
   <!-- 後端 C# RESTful 專案進度狀態分析統計 API Method -->
-  <Item type="Method" id="8A91B2C3D4E54F60817293A4B5C6D7E8" action="edit">
+  <Item type="Method" where="[Method].[name]='PMO_ProjectAnalytics_API'" action="edit">
     <execution_allowed_to keyed_name="World" type="Identity">A73B655731924CD0B027E4F4D5FCC0A9</execution_allowed_to>
     <method_code><![CDATA[// ============================================================================
 // 檔案名稱：PMO_ProjectAnalytics_API.cs
@@ -1661,9 +1661,11 @@ public class WorkloadAggregator : IWorkloadAggregator
             }
         }
 
-        // 聚合 workingtime_record 工時回報記錄
+        // 聚合 workingtime_record 工時回報記錄，並記錄哪些專案已有 workingtime_record 實體回報
         System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto>> wtBreakdownMap =
             new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto>>(System.StringComparer.OrdinalIgnoreCase);
+        System.Collections.Generic.HashSet<int> projectsWithWtRecords =
+            new System.Collections.Generic.HashSet<int>();
 
         if (workTimeRecords != null && workTimeRecords.Count > 0)
         {
@@ -1724,6 +1726,7 @@ public class WorkloadAggregator : IWorkloadAggregator
 
                 if (pNum > 0)
                 {
+                    projectsWithWtRecords.Add(pNum);
                     projSetMap[targetKey].Add(pNum);
                     System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto> mProjMap = wtBreakdownMap[targetKey];
                     if (!mProjMap.ContainsKey(pNum))
@@ -1751,20 +1754,39 @@ public class WorkloadAggregator : IWorkloadAggregator
             dto.TotalActualHours = System.Math.Round(dto.TotalActualHours, 1);
             dto.RemainingEstHours = System.Math.Round(dto.RemainingEstHours, 1);
 
-            // 組裝該成員各專案工時回報明細 (優先取 workingtime_record 明細，若該員無 workingtime_record 則取 Activity2 實報工時明細)
-            System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto> sourceBreakdown =
-                (wtBreakdownMap.ContainsKey(key) && wtBreakdownMap[key].Count > 0)
-                    ? wtBreakdownMap[key]
-                    : (actWorkBreakdownMap.ContainsKey(key) ? actWorkBreakdownMap[key] : null);
+            // 組裝該成員各專案工時回報明細：
+            // 1. 優先放入該成員於 workingtime_record 實際回報之各專案工時。
+            // 2. 針對完全無 workingtime_record 紀錄之專案 (即 !projectsWithWtRecords.Contains(pNum))，才回退取 Activity2 實報工時明細，
+            //    防止某專案已有 workingtime_record 時，將他人回報在任務上的 rollup_actual_work 重複冠給未報工的任務指派人。
+            System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto> mergedBreakdown =
+                new System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto>();
+
+            if (wtBreakdownMap.ContainsKey(key))
+            {
+                foreach (System.Collections.Generic.KeyValuePair<int, ProjectWorkTimeBreakdownDto> wtKv in wtBreakdownMap[key])
+                {
+                    mergedBreakdown[wtKv.Key] = wtKv.Value;
+                }
+            }
+            if (actWorkBreakdownMap.ContainsKey(key))
+            {
+                foreach (System.Collections.Generic.KeyValuePair<int, ProjectWorkTimeBreakdownDto> actKv in actWorkBreakdownMap[key])
+                {
+                    if (!projectsWithWtRecords.Contains(actKv.Key) && !mergedBreakdown.ContainsKey(actKv.Key))
+                    {
+                        mergedBreakdown[actKv.Key] = actKv.Value;
+                    }
+                }
+            }
 
             double totalReportedHrs = 0.0;
-            if (sourceBreakdown != null && sourceBreakdown.Count > 0)
+            if (mergedBreakdown.Count > 0)
             {
-                foreach (System.Collections.Generic.KeyValuePair<int, ProjectWorkTimeBreakdownDto> bKv in sourceBreakdown)
+                foreach (System.Collections.Generic.KeyValuePair<int, ProjectWorkTimeBreakdownDto> bKv in mergedBreakdown)
                 {
                     ProjectWorkTimeBreakdownDto bItem = bKv.Value;
                     bItem.ReportedHours = System.Math.Round(bItem.ReportedHours, 1);
-                    bItem.ReportedDays = System.Math.Round(bItem.ReportedHours / 8.0, 2);
+                    bItem.ReportedDays = System.Math.Round(bItem.ReportedHours / 8.0, 2, System.MidpointRounding.AwayFromZero);
                     totalReportedHrs += bItem.ReportedHours;
                     dto.ProjectWorkTimeBreakdowns.Add(bItem);
                 }
@@ -1776,14 +1798,15 @@ public class WorkloadAggregator : IWorkloadAggregator
                     return y.ProjNum.CompareTo(x.ProjNum);
                 });
             }
-            else if (dto.TotalActualHours > 0)
+            else if (projectsWithWtRecords.Count == 0 && dto.TotalActualHours > 0)
             {
                 totalReportedHrs = dto.TotalActualHours;
             }
 
             dto.ReportedWorkHours = System.Math.Round(totalReportedHrs, 1);
-            dto.ReportedWorkDays = System.Math.Round(dto.ReportedWorkHours / 8.0, 2);
-            if (dto.TotalActualHours <= 0 && dto.ReportedWorkHours > 0)
+            dto.ReportedWorkDays = System.Math.Round(dto.ReportedWorkHours / 8.0, 2, System.MidpointRounding.AwayFromZero);
+            // 若該專案已有 workingtime_record，使 TotalActualHours 與實際回報工時一致，避免前端顯示矛盾
+            if (projectsWithWtRecords.Count > 0 || dto.TotalActualHours <= 0)
             {
                 dto.TotalActualHours = dto.ReportedWorkHours;
             }
@@ -2474,6 +2497,10 @@ public class ArasProjectRepository : IProjectRepository
         }
 
         System.Collections.Generic.List<string> missingIdentityIds = new System.Collections.Generic.List<string>();
+        System.Collections.Generic.Dictionary<int, string> recordSourceCardIdMap =
+            new System.Collections.Generic.Dictionary<int, string>();
+        System.Collections.Generic.List<string> missingSourceCardIds = new System.Collections.Generic.List<string>();
+
         int count = wtRes.getItemCount();
         for (int i = 0; i < count; i++)
         {
@@ -2500,10 +2527,24 @@ public class ArasProjectRepository : IProjectRepository
 
             string ownerId = item.getProperty("owned_by_id", "");
             string ownerName = item.getPropertyAttribute("owned_by_id", "keyed_name", "");
+            string sourceCardId = item.getProperty("source_id", "");
+
             if (string.IsNullOrEmpty(ownerId) && string.IsNullOrEmpty(ownerName))
             {
-                ownerId = item.getProperty("created_by_id", "");
-                ownerName = item.getPropertyAttribute("created_by_id", "keyed_name", "");
+                if (!string.IsNullOrEmpty(sourceCardId))
+                {
+                    recordSourceCardIdMap[list.Count] = sourceCardId;
+                    string safeCardId = "'" + SanitizeInput(sourceCardId) + "'";
+                    if (!missingSourceCardIds.Contains(safeCardId))
+                    {
+                        missingSourceCardIds.Add(safeCardId);
+                    }
+                }
+                else
+                {
+                    ownerId = item.getProperty("created_by_id", "");
+                    ownerName = item.getPropertyAttribute("created_by_id", "keyed_name", "");
+                }
             }
 
             entry.MemberId = ownerId;
@@ -2520,17 +2561,66 @@ public class ArasProjectRepository : IProjectRepository
             list.Add(entry);
         }
 
-        // 若 MemberId 有值但 MemberName 為空，批次反查 Identity 或 User 補齊顯示姓名
+        // 若有紀錄未直接填寫 owned_by_id，由母表 WorkingTime (工時卡) 反查 owned_by_id 與 owner_name
+        if (missingSourceCardIds.Count > 0)
+        {
+            Item cardQry = this._inn.newItem("WorkingTime", "get");
+            cardQry.setAttribute("select", "id,owned_by_id,owner_name,keyed_name");
+            cardQry.setAttribute("where", "[WORKINGTIME].id IN (" + string.Join(",", missingSourceCardIds.ToArray()) + ")");
+            Item cardRes = cardQry.apply();
+            if (!cardRes.isError())
+            {
+                System.Collections.Generic.Dictionary<string, string> cardOwnerIdMap =
+                    new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
+                System.Collections.Generic.Dictionary<string, string> cardOwnerNameMap =
+                    new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
+                int cCnt = cardRes.getItemCount();
+                for (int c = 0; c < cCnt; c++)
+                {
+                    Item cItem = cardRes.getItemByIndex(c);
+                    string cid = cItem.getID();
+                    string cOwnerId = cItem.getProperty("owned_by_id", "");
+                    string cOwnerName = cItem.getPropertyAttribute("owned_by_id", "keyed_name", cItem.getProperty("owner_name", ""));
+                    if (!string.IsNullOrEmpty(cid))
+                    {
+                        cardOwnerIdMap[cid] = cOwnerId;
+                        cardOwnerNameMap[cid] = cOwnerName;
+                    }
+                }
+                foreach (System.Collections.Generic.KeyValuePair<int, string> kv in recordSourceCardIdMap)
+                {
+                    int idx = kv.Key;
+                    string cid = kv.Value;
+                    if (idx >= 0 && idx < list.Count && cardOwnerIdMap.ContainsKey(cid))
+                    {
+                        list[idx].MemberId = cardOwnerIdMap[cid];
+                        list[idx].MemberName = cardOwnerNameMap[cid];
+                        if (!string.IsNullOrEmpty(list[idx].MemberId) && string.IsNullOrEmpty(list[idx].MemberName))
+                        {
+                            string safeId = "'" + SanitizeInput(list[idx].MemberId) + "'";
+                            if (!missingIdentityIds.Contains(safeId))
+                            {
+                                missingIdentityIds.Add(safeId);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 若 MemberId 有值但 MemberName 為空，批次反查 Identity 與 User 補齊顯示姓名
         if (missingIdentityIds.Count > 0)
         {
+            string idInClause = string.Join(",", missingIdentityIds.ToArray());
+            System.Collections.Generic.Dictionary<string, string> idNameMap =
+                new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
+
             Item idQry = this._inn.newItem("Identity", "get");
             idQry.setAttribute("select", "id,keyed_name,name");
-            idQry.setAttribute("where", "[IDENTITY].id IN (" + string.Join(",", missingIdentityIds.ToArray()) + ")");
+            idQry.setAttribute("where", "[IDENTITY].id IN (" + idInClause + ")");
             Item idRes = idQry.apply();
             if (!idRes.isError())
             {
-                System.Collections.Generic.Dictionary<string, string> idNameMap =
-                    new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
                 int idCnt = idRes.getItemCount();
                 for (int k = 0; k < idCnt; k++)
                 {
@@ -2542,14 +2632,38 @@ public class ArasProjectRepository : IProjectRepository
                         idNameMap[iid] = iName;
                     }
                 }
-                for (int i = 0; i < list.Count; i++)
+            }
+
+            // 若有部分 ID 為 User.id (來自 created_by_id)，再查詢 User 補齊 keyed_name
+            if (idNameMap.Count < missingIdentityIds.Count)
+            {
+                Item usrQry = this._inn.newItem("User", "get");
+                usrQry.setAttribute("select", "id,keyed_name,login_name");
+                usrQry.setAttribute("where", "[USER].id IN (" + idInClause + ")");
+                Item usrRes = usrQry.apply();
+                if (!usrRes.isError())
                 {
-                    if (!string.IsNullOrEmpty(list[i].MemberId) &&
-                        string.IsNullOrEmpty(list[i].MemberName) &&
-                        idNameMap.ContainsKey(list[i].MemberId))
+                    int uCnt = usrRes.getItemCount();
+                    for (int u = 0; u < uCnt; u++)
                     {
-                        list[i].MemberName = idNameMap[list[i].MemberId];
+                        Item uItem = usrRes.getItemByIndex(u);
+                        string uid = uItem.getID();
+                        string uName = uItem.getProperty("keyed_name", uItem.getProperty("login_name", ""));
+                        if (!string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(uName) && !idNameMap.ContainsKey(uid))
+                        {
+                            idNameMap[uid] = uName;
+                        }
                     }
+                }
+            }
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(list[i].MemberId) &&
+                    string.IsNullOrEmpty(list[i].MemberName) &&
+                    idNameMap.ContainsKey(list[i].MemberId))
+                {
+                    list[i].MemberName = idNameMap[list[i].MemberId];
                 }
             }
         }
@@ -3274,7 +3388,7 @@ public class ProjectAnalyticsController
         {
             totalReportedHours += assignees[i].ReportedWorkHours;
         }
-        double totalReportedDays = System.Math.Round(totalReportedHours / 8.0, 2);
+        double totalReportedDays = System.Math.Round(totalReportedHours / 8.0, 2, System.MidpointRounding.AwayFromZero);
         totalReportedHours = System.Math.Round(totalReportedHours, 1);
 
         System.Text.StringBuilder sb = new System.Text.StringBuilder();

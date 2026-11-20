@@ -377,4 +377,11 @@ test("11. [需求 3 & 需求 4] 專案成員工時回報統計、各專案總工
   const modalHtml = PMODashboardApp.renderMemberWorkTimeModalHtml(member);
   assert.ok(modalHtml.includes("1074.6 hr") && modalHtml.includes("134.33 工天"), "Modal 應顯示該員回報總工時與換算總工天");
   assert.ok(modalHtml.includes("全球供應鏈協同門戶與派工整合升級案") && modalHtml.includes("495.0 hr"), "Modal 應列出各專案工時明細");
+
+  // 當下鑽至單一專案 (PROJECT_DETAIL) 點擊成員工時連結時，應優先取用該專案 projectDetailData.assignees 之工時明細
+  await store.setActiveTab("PROJECT_DETAIL", 2127);
+  const singleProjMember = store.openMemberWorkTimeModal("USR_CHANG");
+  assert.ok(singleProjMember, "單一專案下鑽應找到張家豪於該專案之工時資料");
+  assert.equal(singleProjMember.reported_work_hours, 214.6, "單一專案下鑽應顯示該員於專案 2127 之回報工時 214.6 hr");
+  assert.equal(singleProjMember.project_worktime_breakdowns.length, 1);
 });

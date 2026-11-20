@@ -193,13 +193,26 @@
 
   // 開啟指定專案成員之跨專案工時回報明細浮層 Modal (需求 3)
   DashboardStateStore.prototype.openMemberWorkTimeModal = function (assigneeId = "") {
-    var list = (this.assigneeWorkloadData && this.assigneeWorkloadData.assignees) ||
-               (this.projectDetailData && this.projectDetailData.assignees) || [];
+    var primaryList = this.activeTab === "PROJECT_DETAIL"
+      ? ((this.projectDetailData && this.projectDetailData.assignees) || [])
+      : ((this.assigneeWorkloadData && this.assigneeWorkloadData.assignees) || []);
+    var fallbackList = this.activeTab === "PROJECT_DETAIL"
+      ? ((this.assigneeWorkloadData && this.assigneeWorkloadData.assignees) || [])
+      : ((this.projectDetailData && this.projectDetailData.assignees) || []);
     var found = null;
-    for (var i = 0; i < list.length; i++) {
-      if (String(list[i].assignee_id) === String(assigneeId) || String(list[i].assignee_name) === String(assigneeId)) {
-        found = list[i];
+    var i = 0;
+    for (i = 0; i < primaryList.length; i++) {
+      if (String(primaryList[i].assignee_id) === String(assigneeId) || String(primaryList[i].assignee_name) === String(assigneeId)) {
+        found = primaryList[i];
         break;
+      }
+    }
+    if (!found) {
+      for (i = 0; i < fallbackList.length; i++) {
+        if (String(fallbackList[i].assignee_id) === String(assigneeId) || String(fallbackList[i].assignee_name) === String(assigneeId)) {
+          found = fallbackList[i];
+          break;
+        }
       }
     }
     this.selectedMemberForWorkTimeModal = found;

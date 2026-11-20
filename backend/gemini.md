@@ -60,10 +60,11 @@
 - **指派人取得 (`Activity2.managed_by_id` 優先)**：`GetActivitiesWithAssignments` 中，首要讀取 `managed_by_id`（及其 `keyed_name` 屬性或 `Identity` 反查）作為 `AssigneeId` / `AssigneeName`；僅當 `managed_by_id` 為空時，才參考 `Activity2 Assignment` 或回退至 `owned_by_id`，嚴禁覆蓋已存在之 `managed_by_id`。
 - **任務實報工時提取**：`Activity2.actual_work` 於 BDM 常為空值，實際滾算工時存於 `Activity2.rollup_actual_work`，因此讀取 `ActualWork` 時必須優先取 `rollup_actual_work`（若 `> 0`），否則才取 `actual_work`。
 - **扣除里程碑任務 (`is_milestone == '1'`)**：`WorkloadAggregator.AggregateByAssignee` 統計成員負荷時，必須將 `act.IsMilestone == true` 的里程碑任務扣除忽略不計。
-- **專案成員工時回報統計 (`workingtime_record`)**：
-  - 針對當前篩選條件下之專案 ID 集合 (`project IN (...)`)，查詢 `workingtime_record` ItemType（提取 `project`、`cn_act2`、`work_hour`、`work_date`、`owned_by_id`、`created_by_id`）。
-  - 依回報成員 (`owned_by_id`，若空則取 `created_by_id` 或反查母表 `WorkingTime.owned_by_id`) 聚合計算每位成員在當前篩選專案下的「工時回報總值 (`ReportedWorkHours`)」、「換算總工天 (`ReportedWorkDays = ReportedWorkHours / 8.0`)」以及「各專案工時回報明細清單 (`ProjectWorkTimeBreakdownDto`：含專案 ID、專案編號、專案名稱、回報工時、回報工天、回報筆數)」。
-  - 將成員工時回報統計同步整合至 `AssigneeWorkloadDto` 與獨立之工時回報排行榜清單，供前端「專案成員工時回報統計」與「任務負荷統計表之工時回報下鑽連結」使用。
+- **專案成員工時回報統計 (`workingtime_record` 與母表 `WorkingTime` 工時卡)**：
+  - 針對當前篩選條件下之專案 ID 集合 (`project IN (...)`)，查詢 `workingtime_record` ItemType（提取 `project`、`source_id`、`cn_act2`、`work_hour`、`work_date`、`owned_by_id`、`created_by_id`）。
+  - **回報人員識別順序**：優先取 `workingtime_record.owned_by_id`（Identity）；若為空，則由母表 `WorkingTime` (`source_id`) 反查 `owned_by_id` / `owner_name`；若仍為空才取 `created_by_id`（並支援 `Identity` 與 `User` 雙表反查 `keyed_name` 顯示姓名）。
+  - 依回報成員聚合計算每位成員在當前篩選專案下的「工時回報總值 (`ReportedWorkHours`)」、「換算總工天 (`ReportedWorkDays = ReportedWorkHours / 8.0`)」以及「各專案工時回報明細清單 (`ProjectWorkTimeBreakdownDto`)」。
+  - **防重複與回退原則**：若某專案已有 `workingtime_record` 紀錄（例如 `[2364]` 共 10 筆合計 49 hr：羅仁 45 hr、張智堯 4 hr），該專案下所有成員之工時回報嚴格以 `workingtime_record` 實際回報為準（未回報工時之指派成員如周樹榮於該專案之回報工時為 0 hr，不會誤把其他人回報在該任務上的 `rollup_actual_work` 冠給未報工的任務指派人）；僅當某專案完全無 `workingtime_record` 明細時，才回退採用 `Activity2.rollup_actual_work` / `actual_work`。
 - **PM 績效排序**：`BuildGroupPerformanceJson` 依專案數量 (`project_count`) 降冪排序。
 - **WBS 階段排序**：`AnalyzeMainStages` 回傳之主階段清單必須依據 `StageName` 進行自然升冪排序。
 

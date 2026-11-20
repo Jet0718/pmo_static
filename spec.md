@@ -178,7 +178,8 @@ flowchart TB
 ### 3.3 專案成員 (`Assignee`) 任務負荷與工時回報統計 (`workingtime_record`)
 - **任務指派統計**：優先讀取 `Activity2.managed_by_id`，若為空則讀取 `Activity2 Assignment` 的指派成員 (`related_id`) 或回退讀取 `Activity2.owned_by_id`，並自動扣除里程碑任務 (`is_milestone == '1'`)。
 - **工時回報統計 (`workingtime_record` 聚合)**：
-  - 針對當前篩選條件下的所有專案，檢索 `workingtime_record` 中 `project` 屬於該批專案之工時回報紀錄（若無獨立 `workingtime_record` 紀錄時，亦支援由該成員於各專案 `Activity2` 任務之 `rollup_actual_work` / `actual_work` 彙總）。
+  - 針對當前篩選條件下的所有專案，檢索 `workingtime_record` 中 `project` 屬於該批專案之工時回報紀錄（依 `owned_by_id` &rarr; 母表 `WorkingTime.owned_by_id` / `owner_name` &rarr; `created_by_id` 解析回報成員，並支援 `Identity` 與 `User` 雙表反查 `keyed_name`）。
+  - 當某專案存在 `workingtime_record` 紀錄時，該專案下各成員之回報工時嚴格以 `workingtime_record` 實際回報人為準（防止將他人回報於任務上之 `rollup_actual_work` 重複計算給未回報工時之任務指派人）；僅當某專案無 `workingtime_record` 紀錄時，才回退由該成員於各專案 `Activity2` 任務之 `rollup_actual_work` / `actual_work` 彙總。
   - 針對每位成員統計：
     - `totalTasks` (總指派任務數)
     - `completedTasks` (已完成任務數：`state == 'Complete'` 或 `status == 'completed'` 或 `percent_compl >= 100`)

@@ -28,10 +28,12 @@ $csPath = "c:\TEST\pmo_static\backend\PMO_ProjectAnalytics_API.cs"
 $csContent = Get-Content -Raw -Encoding UTF8 $csPath
 
 # 3. 輸出 Method AML: PMO_Analytics\Import\Method\PMO_ProjectAnalytics_API.xml
+# 注意：Method 為 Versionable ItemType，每次進版皆會產生新 id，故 edit 模式下以 where="[Method].[name]='PMO_ProjectAnalytics_API'" 定位現有最新版
+$methodIdOrWhere = if ($Action -eq "edit") { 'where="[Method].[name]=''PMO_ProjectAnalytics_API''"' } else { 'id="8A91B2C3D4E54F60817293A4B5C6D7E8"' }
 $methodAml = @"
 <AML>
   <!-- 後端 C# RESTful 專案進度狀態分析統計 API Method -->
-  <Item type="Method" id="8A91B2C3D4E54F60817293A4B5C6D7E8" action="$Action">
+  <Item type="Method" $methodIdOrWhere action="$Action">
     <execution_allowed_to keyed_name="World" type="Identity">A73B655731924CD0B027E4F4D5FCC0A9</execution_allowed_to>
     <method_code><![CDATA[$csContent]]></method_code>
     <method_type>C#</method_type>

@@ -557,5 +557,43 @@ public class Program
                    jsonAsgnWt.Contains("\"reported_hours\":40") &&
                    jsonAsgnWt.Contains("\"reported_days\":5"),
             "成員工時回報統計驗證：應正確聚合總回報工時 96 hr (12 工天) 與各專案工時/工天明細");
+
+        // 8. 測試 BDM-Test [2364] 復盛應用科技PLM導入 實例 (12 + 17 + 16 + 4 = 49 hr，且避免 workingtime_record 與 Activity2.rollup_actual_work 跨人員重複計數)
+        FakeProjectRepository repo2364 = new FakeProjectRepository();
+        repo2364.CurrentUser = ctxPmoV9;
+        repo2364.Projects.Add(new ProjectRecord
+        {
+            Id = "374A8813E7EF496EA5B5FC430CF6417F",
+            ProjNum = 2364,
+            Name = "復盛應用科技PLM導入",
+            State = "Active",
+            ProjectType = "1.Standard",
+            TeamId = "TPS",
+            TeamName = "TPS"
+        });
+        repo2364.Activities.Add(new ActivityRecord { Id = "ACT_1010", ProjNum = 2364, Name = "1010 啟動會議", AssigneeId = "USR_JET", AssigneeName = "羅仁 Jet", State = "Complete", PercentCompl = 100, WorkEst = 14, ActualWork = 12 });
+        repo2364.Activities.Add(new ActivityRecord { Id = "ACT_2010", ProjNum = 2364, Name = "2010 需求訪談", AssigneeId = "USR_JET", AssigneeName = "羅仁 Jet", State = "Active", PercentCompl = 20, WorkEst = 80, ActualWork = 17 });
+        repo2364.Activities.Add(new ActivityRecord { Id = "ACT_1040", ProjNum = 2364, Name = "1040 需求訪談計劃", AssigneeId = "USR_JET", AssigneeName = "羅仁 Jet", State = "Complete", PercentCompl = 100, WorkEst = 12, ActualWork = 16 });
+        repo2364.Activities.Add(new ActivityRecord { Id = "ACT_2050", ProjNum = 2364, Name = "2050 系統設計規劃", AssigneeId = "USR_SCOTT", AssigneeName = "周樹榮 scott.chou", State = "Active", PercentCompl = 0, WorkEst = 32, ActualWork = 4 });
+        repo2364.Activities.Add(new ActivityRecord { Id = "ACT_3010", ProjNum = 2364, Name = "3010 系統架構", AssigneeId = "USR_GAVIN", AssigneeName = "張智堯 Gavin.Chang", State = "Active", PercentCompl = 0, WorkEst = 40, ActualWork = 0 });
+
+        repo2364.WorkTimeRecords.Add(new WorkTimeRecordEntry { Id = "W2364_1", ProjectId = "374A8813E7EF496EA5B5FC430CF6417F", ProjNum = 2364, ProjectName = "復盛應用科技PLM導入", MemberId = "USR_JET", MemberName = "羅仁 Jet", WorkHours = 12.0 });
+        repo2364.WorkTimeRecords.Add(new WorkTimeRecordEntry { Id = "W2364_2", ProjectId = "374A8813E7EF496EA5B5FC430CF6417F", ProjNum = 2364, ProjectName = "復盛應用科技PLM導入", MemberId = "USR_JET", MemberName = "羅仁 Jet", WorkHours = 17.0 });
+        repo2364.WorkTimeRecords.Add(new WorkTimeRecordEntry { Id = "W2364_3", ProjectId = "374A8813E7EF496EA5B5FC430CF6417F", ProjNum = 2364, ProjectName = "復盛應用科技PLM導入", MemberId = "USR_JET", MemberName = "羅仁 Jet", WorkHours = 16.0 });
+        repo2364.WorkTimeRecords.Add(new WorkTimeRecordEntry { Id = "W2364_4", ProjectId = "374A8813E7EF496EA5B5FC430CF6417F", ProjNum = 2364, ProjectName = "復盛應用科技PLM導入", MemberId = "USR_GAVIN", MemberName = "張智堯 Gavin.Chang", WorkHours = 4.0 });
+
+        ProjectAnalyticsController ctrl2364 = new ProjectAnalyticsController(repo2364, healthCalc, stageAnalyzer, workloadAgg);
+        Item req2364 = new Item("Method", "PMO_ProjectAnalytics_API");
+        req2364.setProperty("route", "/api/v1/dashboard/assignees");
+        req2364.setProperty("state", "Active");
+        string json2364 = ctrl2364.HandleItemRequest(req2364, today);
+
+        AssertTrue(json2364.Contains("\"total_reported_hours\":49") &&
+                   json2364.Contains("\"total_reported_days\":6.13") &&
+                   json2364.Contains("\"reported_work_hours\":45") &&
+                   json2364.Contains("\"reported_work_days\":5.63") &&
+                   json2364.Contains("\"reported_work_hours\":4") &&
+                   json2364.Contains("\"reported_work_days\":0.5"),
+            "專案 2364 工時回報驗證：全案總回報工時應精確為 49 hr (6.13 工天)，羅仁 45 hr (5.63 工天)、張智堯 4 hr (0.5 工天)，且不重複計入周樹榮");
     }
 }

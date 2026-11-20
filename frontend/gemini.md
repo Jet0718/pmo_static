@@ -18,7 +18,7 @@
    - **WBS 各階段 (Stage / Milestone) 進度達成率與時程偏差分析圖表**（依名稱自然升冪排序）。
 5. **專案成員任務負荷統計與工時回報統計 (`/api/v1/dashboard/assignees`)**:
    - **專案成員工時回報統計**：針對當前篩選條件下，統計各成員回報任務的工時統計總值 (`reported_work_hours` / `reported_work_days`) 與視覺化排行圖表。
-   - **成員任務負荷統計表整合工時回報下鑽連結**：在專案成員任務負荷統計表中增加「使用者工時回報總值」欄位並附上超連結 (`.js-drill-member-worktime`)，點擊後開啟防裁切浮層 Modal，深入檢視該員在當前篩選條件下**各專案的工時回報總工時 (`hr`) 與總工天 (`工時 / 8`) 明細表**（並支援點擊專案左側 Item Icon 開啟 Aras 專案畫面）。
+   - **成員任務負荷統計表整合工時回報下鑽連結**：在專案成員任務負荷統計表中增加「使用者工時回報總值」欄位並附上超連結 (`.js-drill-member-worktime`)，點擊後開啟防裁切浮層 Modal，深入檢視該員在當前篩選條件下**各專案的工時回報總工時 (`hr`) 與總工天 (`工時 / 8`) 明細表**（並支援點擊專案左側 Item Icon 開啟 Aras 專案畫面）。當使用者在「階段達成率與成員分析 (`PROJECT_DETAIL`)」頁籤點擊成員工時時，優先從當前專案 `projectDetailData.assignees` 取用該專案之工時明細；在「成員任務負荷與工時回報 (`ASSIGNEES`)」頁籤點擊時，則從 `assigneeWorkloadData.assignees` 取用跨專案工時明細。
 
 ## 2. Aras Client / JavaScript 嚴格規範
 1. **零隱式型別與 Linter 防護**：
