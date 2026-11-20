@@ -638,6 +638,205 @@
     return "Other";
   }
 
+  // 依據當前登入使用者之 team_id.keyed_name 與 value_score 建構使用者權限上下文 (需求 2)
+  function buildUserContext(rawUser = {}) {
+    var u = rawUser || {};
+    var userId = String(u.user_id || u.id || "").trim();
+    var loginName = String(u.login_name || "").trim();
+    var userName = String(u.user_name || u.keyed_name || loginName || "系統使用者").trim();
+    var teamId = String(u.team_id || "").trim();
+    var rawTeamName = String(u.raw_team_keyed_name || u.team_keyed_name || u.team_code || "").trim();
+    var valueScore = String(u.value_score || u.vault_score || "").trim().toUpperCase();
+
+    var normTeam = normalizeTeamCode(teamId, rawTeamName);
+    var isManagedExecTeam = (normTeam === "TPS" || normTeam === "SUS" || normTeam === "SHS" || normTeam === "ICS");
+    var isHighPrivilegeScore = (valueScore === "V9" || valueScore === "V10");
+    var isTeamRestricted = Boolean(isManagedExecTeam && !isHighPrivilegeScore);
+    var defaultTeamFilter = isManagedExecTeam ? normTeam : "ALL";
+
+    return {
+      user_id: userId,
+      login_name: loginName,
+      user_name: userName,
+      team_id: teamId,
+      raw_team_keyed_name: rawTeamName || normTeam,
+      team_code: isManagedExecTeam ? normTeam : (rawTeamName || normTeam),
+      value_score: valueScore,
+      is_managed_exec_team: isManagedExecTeam,
+      is_high_privilege_score: isHighPrivilegeScore,
+      is_team_restricted: isTeamRestricted,
+      default_team_filter: defaultTeamFilter
+    };
+  }
+
+  // 常用自然語言篩選條件提示清單 (供 NoUI 介面渲染 Prompt Chips 點擊快速帶入)
+  var COMMON_NL_PROMPT_CHIPS = [
+    { label: "進行中 Standard/Professional (預設)", query: "進行中 Standard Professional" },
+    { label: "紅燈嚴重延遲專案", query: "進行中 紅燈" },
+    { label: "黃燈進度警示專案", query: "進行中 黃燈" },
+    { label: "綠燈進度正常專案", query: "進行中 綠燈" },
+    { label: "TPS 執行團隊專案", query: "進行中 TPS", team_only: "TPS" },
+    { label: "ICS 執行團隊專案", query: "進行中 ICS", team_only: "ICS" },
+    { label: "SUS 執行團隊專案", query: "進行中 SUS", team_only: "SUS" },
+    { label: "SHS 執行團隊專案", query: "進行中 SHS", team_only: "SHS" },
+    { label: "PMO 執行團隊專案", query: "進行中 PMO", team_only: "PMO" },
+    { label: "台北服務中心專案", query: "進行中 台北服務中心" },
+    { label: "新竹服務中心專案", query: "進行中 新竹服務中心" },
+    { label: "全部專案類型 (9大類)", query: "進行中 全部類型" },
+    { label: "包含已結案全部狀態", query: "全部狀態 Standard Professional" }
+  ];
+
+  // 解析自然語言輸入字串為結構化篩選條件物件 (需求 1 & 需求 2：預設保留 project_type 為 1.Standard,2.Professional)
+  function parseNaturalLanguageQuery(rawInput = "", userContext = null) {
+    var ctx = userContext ? buildUserContext(userContext) : buildUserContext({});
+    var defaultTeam = ctx.is_managed_exec_team ? ctx.default_team_filter : "ALL";
+
+    var parsed = {
+      natural_query: String(rawInput || "").trim(),
+      state: "Active",
+      project_type: "1.Standard,2.Professional",
+      territory: "ALL",
+      team_id: defaultTeam,
+      pm_id: "ALL",
+      health_status: "ALL",
+      keyword: "",
+      has_explicit_team: false,
+      blocked_cross_team_attempt: false
+    };
+
+    var text = parsed.natural_query;
+    if (!text) {
+      return parsed;
+    }
+
+    var working = text;
+
+    // 1. 解析專案狀態 (state)
+    if (/(全部狀態|所有狀態|不限狀態|含結案|包含結案)/i.test(working)) {
+      parsed.state = "ALL";
+      working = working.replace(/(全部狀態|所有狀態|不限狀態|含結案|包含結案)/gi, " ");
+    } else if (/(已結案|結案|closed)/i.test(working)) {
+      parsed.state = "closed";
+      working = working.replace(/(已結案|結案|closed)/gi, " ");
+    } else if (/(暫停中|暫停|pending)/i.test(working)) {
+      parsed.state = "pending";
+      working = working.replace(/(暫停中|暫停|pending)/gi, " ");
+    } else if (/(進行中|啟動中|執行中|active)/i.test(working)) {
+      parsed.state = "Active";
+      working = working.replace(/(進行中|啟動中|執行中|active)/gi, " ");
+    }
+
+    // 2. 解析專案類型 (cn_project_type，預設保留 1.Standard,2.Professional)
+    var matchedTypes = [];
+    if (/(全部類型|所有類型|不限類型|9大類|九大類)/i.test(working)) {
+      parsed.project_type = "ALL";
+      working = working.replace(/(全部類型|所有類型|不限類型|9大類|九大類)/gi, " ");
+    } else {
+      var typeRules = [
+        { code: "1.Standard", regex: /(1\.Standard|\bstandard\b|標準型|標準專案|標準)/gi },
+        { code: "2.Professional", regex: /(2\.Professional|\bprofessional\b|\bperfessional\b|專業型|專業專案|專業)/gi },
+        { code: "3.Upgrade", regex: /(3\.Upgrade|\bupgrade\b|升級型|升級專案|升級)/gi },
+        { code: "4.Customize", regex: /(4\.Customize|\bcustomize\b|客製化|客製型|客製)/gi },
+        { code: "5.Product", regex: /(5\.Product|\bproduct\b|產品型|產品)/gi },
+        { code: "6.Technical", regex: /(6\.Technical|\btechnical\b|技術型|技術服務)/gi },
+        { code: "7.Marketing", regex: /(7\.Marketing|\bmarketing\b|行銷型|行銷)/gi },
+        { code: "8.EmployeeTraining", regex: /(8\.EmployeeTraining|\bemployeetraining\b|\btraining\b|員工訓練|教育訓練)/gi },
+        { code: "F.Misc", regex: /(F\.Misc|\bmisc\b|什項)/gi }
+      ];
+      typeRules.forEach(function (rule) {
+        if (rule.regex.test(working)) {
+          if (matchedTypes.indexOf(rule.code) < 0) {
+            matchedTypes.push(rule.code);
+          }
+          working = working.replace(rule.regex, " ");
+        }
+      });
+      if (matchedTypes.length > 0) {
+        parsed.project_type = matchedTypes.join(",");
+      }
+    }
+
+    // 3. 解析健康度燈號 (health_status)
+    if (/(全部燈號|所有燈號|不限燈號)/i.test(working)) {
+      parsed.health_status = "ALL";
+      working = working.replace(/(全部燈號|所有燈號|不限燈號)/gi, " ");
+    } else if (/(紅燈|嚴重延遲|危險專案|高風險|\bred\b)/i.test(working)) {
+      parsed.health_status = "RED";
+      working = working.replace(/(紅燈|嚴重延遲|危險專案|高風險|\bred\b)/gi, " ");
+    } else if (/(黃燈|進度警示|警示專案|注意|\byellow\b|\bamber\b)/i.test(working)) {
+      parsed.health_status = "YELLOW";
+      working = working.replace(/(黃燈|進度警示|警示專案|注意|\byellow\b|\bamber\b)/gi, " ");
+    } else if (/(綠燈|進度正常|正常專案|良好|\bgreen\b)/i.test(working)) {
+      parsed.health_status = "GREEN";
+      working = working.replace(/(綠燈|進度正常|正常專案|良好|\bgreen\b)/gi, " ");
+    }
+
+    // 4. 解析服務中心 (territory)
+    if (/(全部服務中心|所有服務中心)/i.test(working)) {
+      parsed.territory = "ALL";
+      working = working.replace(/(全部服務中心|所有服務中心)/gi, " ");
+    } else if (/(台北服務中心|台北)/i.test(working)) {
+      parsed.territory = "台北服務中心";
+      working = working.replace(/(台北服務中心|台北)/gi, " ");
+    } else if (/(新竹服務中心|新竹)/i.test(working)) {
+      parsed.territory = "新竹服務中心";
+      working = working.replace(/(新竹服務中心|新竹)/gi, " ");
+    } else if (/(台中服務中心|台中)/i.test(working)) {
+      parsed.territory = "台中服務中心";
+      working = working.replace(/(台中服務中心|台中)/gi, " ");
+    } else if (/(台南服務中心|台南)/i.test(working)) {
+      parsed.territory = "台南服務中心";
+      working = working.replace(/(台南服務中心|台南)/gi, " ");
+    }
+
+    // 5. 解析執行團隊 (team_id) 並套用使用者 value_score 跨團隊查詢限制
+    var requestedTeam = null;
+    if (/(全部團隊|所有團隊|不限團隊|全公司團隊)/i.test(working)) {
+      requestedTeam = "ALL";
+      working = working.replace(/(全部團隊|所有團隊|不限團隊|全公司團隊)/gi, " ");
+    } else if (/\bTPS\b/i.test(working)) {
+      requestedTeam = "TPS";
+      working = working.replace(/\bTPS\b/gi, " ");
+    } else if (/\bICS\b/i.test(working)) {
+      requestedTeam = "ICS";
+      working = working.replace(/\bICS\b/gi, " ");
+    } else if (/\bPMO\b/i.test(working)) {
+      requestedTeam = "PMO";
+      working = working.replace(/\bPMO\b/gi, " ");
+    } else if (/\bSUS\b/i.test(working)) {
+      requestedTeam = "SUS";
+      working = working.replace(/\bSUS\b/gi, " ");
+    } else if (/\bSHS\b/i.test(working)) {
+      requestedTeam = "SHS";
+      working = working.replace(/\bSHS\b/gi, " ");
+    } else if (/(其他團隊|\bOther\b)/i.test(working)) {
+      requestedTeam = "Other";
+      working = working.replace(/(其他團隊|\bOther\b)/gi, " ");
+    }
+
+    if (requestedTeam !== null) {
+      parsed.has_explicit_team = true;
+      if (ctx.is_team_restricted && requestedTeam.toUpperCase() !== ctx.team_code.toUpperCase()) {
+        // 受限使用者嘗試查詢其他執行團隊：強制鎖定為自身執行團隊並標記阻擋提示
+        parsed.team_id = ctx.team_code;
+        parsed.blocked_cross_team_attempt = true;
+      } else {
+        parsed.team_id = requestedTeam;
+      }
+    } else if (ctx.is_team_restricted) {
+      parsed.team_id = ctx.team_code;
+    }
+
+    // 6. 清理連接詞與贅字，剩餘字詞作為 keyword (可搜尋專案編號、名稱、客戶、PM)
+    working = working
+      .replace(/(查詢|搜尋|顯示|篩選|找出|列出|檢視|查看|執行團隊|團隊|負責的|負責|的專案|專案|或|與|及|和|、|,|，)/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    parsed.keyword = working;
+    return parsed;
+  }
+
   function safeNumber(val = 0, fallback = 0) {
     var num = Number(val);
     if (!Number.isFinite(num)) return fallback;
@@ -868,15 +1067,42 @@
     };
   }
 
-  // 聚合跨專案或指定專案之成員任務負荷清單
+  // 聚合跨專案或指定專案之成員任務負荷與工時回報統計清單 (需求 3：含各專案工時/工天明細)
   function aggregateCrossProjectAssignees(projects = [], filters = {}) {
     var targetProjNum = Number(filters.proj_num || 0);
+    var stateFilter = String(filters.state || "ALL").trim();
+    var typeFilter = String(filters.project_type || "ALL").trim();
+    var territoryFilter = String(filters.territory || "ALL").trim();
+    var teamFilter = String(filters.team_id || "ALL").trim();
+    var healthFilter = String(filters.health_status || "ALL").trim();
+    var keyword = String(filters.keyword || "").trim().toLowerCase();
+
     var map = {};
 
     projects.forEach(function (p) {
       if (targetProjNum > 0 && p.proj_num !== targetProjNum) return;
-      if (filters.team_id && filters.team_id !== "ALL" && p.team_id !== filters.team_id) return;
-      if (filters.state && filters.state !== "ALL" && String(p.state || "").toLowerCase() !== String(filters.state).toLowerCase()) return;
+      if (stateFilter && stateFilter.toUpperCase() !== "ALL" && String(p.state || "").toLowerCase() !== stateFilter.toLowerCase()) return;
+      if (typeFilter && typeFilter !== "ALL") {
+        var types = typeFilter.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
+        if (types.length > 0 && types.indexOf(p.project_type) < 0) return;
+      }
+      if (territoryFilter && territoryFilter !== "ALL" && p.territory !== territoryFilter) return;
+      if (teamFilter && teamFilter !== "ALL") {
+        var pTeam = normalizeTeamCode(p.team_id, p.team_name);
+        if (teamFilter === "Other") {
+          if (["TPS", "ICS", "PMO", "SUS", "SHS"].indexOf(pTeam) >= 0) return;
+        } else if (pTeam !== teamFilter) {
+          return;
+        }
+      }
+      if (healthFilter && healthFilter !== "ALL" && p.health_status !== healthFilter) return;
+      if (keyword) {
+        var matchNum = String(p.proj_num || "").indexOf(keyword) >= 0;
+        var matchName = String(p.project_name || "").toLowerCase().indexOf(keyword) >= 0;
+        var matchPm = String(p.pm_name || "").toLowerCase().indexOf(keyword) >= 0;
+        var matchCust = String(p.customer_name || "").toLowerCase().indexOf(keyword) >= 0;
+        if (!matchNum && !matchName && !matchPm && !matchCust) return;
+      }
 
       var assignees = p.assignees || [];
       assignees.forEach(function (a) {
@@ -894,10 +1120,13 @@
             total_est_hours: 0,
             total_actual_hours: 0,
             remaining_est_hours: 0,
-            project_nums: {}
+            reported_work_hours: 0,
+            project_nums: {},
+            project_breakdowns_map: {}
           };
         }
         var acc = map[id];
+        var actHours = safeNumber(a.reported_work_hours !== undefined ? a.reported_work_hours : a.total_actual_hours, 0);
         acc.total_tasks += safeNumber(a.total_tasks, 0);
         acc.completed_tasks += safeNumber(a.completed_tasks, 0);
         acc.in_progress_tasks += safeNumber(a.in_progress_tasks, 0);
@@ -907,7 +1136,21 @@
         acc.total_est_hours += safeNumber(a.total_est_hours, 0);
         acc.total_actual_hours += safeNumber(a.total_actual_hours, 0);
         acc.remaining_est_hours += safeNumber(a.remaining_est_hours, 0);
+        acc.reported_work_hours += actHours;
         acc.project_nums[p.proj_num] = true;
+
+        if (!acc.project_breakdowns_map[p.proj_num]) {
+          acc.project_breakdowns_map[p.proj_num] = {
+            project_id: p.id || "",
+            proj_num: p.proj_num,
+            project_name: p.project_name || ("專案 " + p.proj_num),
+            reported_hours: 0,
+            reported_days: 0,
+            record_count: 0
+          };
+        }
+        acc.project_breakdowns_map[p.proj_num].reported_hours += actHours;
+        acc.project_breakdowns_map[p.proj_num].record_count += safeNumber(a.total_tasks, 1);
       });
     });
 
@@ -925,6 +1168,24 @@
       } else if (backlog >= 2 || item.remaining_est_hours >= 16) {
         loadLevel = "NORMAL";
       }
+
+      var breakdowns = Object.keys(item.project_breakdowns_map).map(function (pNumKey) {
+        var b = item.project_breakdowns_map[pNumKey];
+        var hrs = Math.round(b.reported_hours * 10 + 1e-9) / 10;
+        return {
+          project_id: b.project_id,
+          proj_num: b.proj_num,
+          project_name: b.project_name,
+          reported_hours: hrs,
+          reported_days: Math.round((hrs / 8.0) * 100 + 1e-9) / 100,
+          record_count: b.record_count
+        };
+      });
+      breakdowns.sort(function (x, y) { return y.reported_hours - x.reported_hours; });
+
+      var repHours = Math.round(item.reported_work_hours * 10 + 1e-9) / 10;
+      var repDays = Math.round((repHours / 8.0) * 100 + 1e-9) / 100;
+
       return {
         assignee_id: item.assignee_id,
         assignee_name: item.assignee_name,
@@ -939,17 +1200,49 @@
         total_est_hours: Number(item.total_est_hours.toFixed(1)),
         total_actual_hours: Number(item.total_actual_hours.toFixed(1)),
         remaining_est_hours: Number(item.remaining_est_hours.toFixed(1)),
+        reported_work_hours: repHours,
+        reported_work_days: repDays,
         load_level: loadLevel,
-        project_count: Object.keys(item.project_nums).length
+        project_count: Object.keys(item.project_nums).length,
+        project_worktime_breakdowns: breakdowns
       };
     });
 
     list.sort(function (a, b) {
       if (b.overdue_tasks !== a.overdue_tasks) return b.overdue_tasks - a.overdue_tasks;
-      return b.total_tasks - a.total_tasks;
+      if (b.total_tasks !== a.total_tasks) return b.total_tasks - a.total_tasks;
+      return b.reported_work_hours - a.reported_work_hours;
     });
 
     return list;
+  }
+
+  // 在 Aras Innovator 系統中開啟指定專案 Item 畫面 (需求 4)
+  function openProjectItemInAras(projectId = "", projNum = 0, arasContext = null) {
+    var arasObj = arasContext || detectArasObject();
+    if (arasObj && typeof arasObj.uiShowItem === "function" && projectId) {
+      try {
+        arasObj.uiShowItem("Project", String(projectId));
+        return { opened: true, mode: "uiShowItem", project_id: String(projectId), proj_num: Number(projNum || 0) };
+      } catch (err) {
+        // fallback
+      }
+    }
+    if (arasObj && typeof arasObj.getItemByKeyedName === "function" && typeof arasObj.uiShowItem === "function" && projNum) {
+      try {
+        var itemNode = arasObj.getItemByKeyedName("Project", String(projNum));
+        if (itemNode) {
+          var idAttr = itemNode.getAttribute ? itemNode.getAttribute("id") : "";
+          if (idAttr) {
+            arasObj.uiShowItem("Project", idAttr);
+            return { opened: true, mode: "getItemByKeyedName", project_id: idAttr, proj_num: Number(projNum || 0) };
+          }
+        }
+      } catch (err2) {
+        // fallback
+      }
+    }
+    return { opened: false, mode: "preview", project_id: String(projectId || ""), proj_num: Number(projNum || 0) };
   }
 
   // ArasApiClient 建構器：支援 IOM applyMethod 與 Mock Adapter 無縫切換
@@ -957,7 +1250,21 @@
     this.methodName = options.methodName || "PMO_ProjectAnalytics_API";
     this.mockProjects = options.mockProjects || DEFAULT_MOCK_PROJECTS;
     this.arasObj = options.arasObj || detectArasObject();
+    this.mockUserContext = buildUserContext(options.mockUserContext || {
+      user_id: "1FF16066A5E04E75AC617149DD70DA2E",
+      login_name: "jet.lo",
+      user_name: "羅仁 Jet",
+      team_id: "CDE4225D27224672B7CDDD497486C5AA",
+      raw_team_keyed_name: "PMO",
+      value_score: "V9"
+    });
   }
+
+  // 設定或切換當前模擬使用者 (供測試不同 team_id 與 value_score 權限情境)
+  ArasApiClient.prototype.setMockUserContext = function (userObj = {}) {
+    this.mockUserContext = buildUserContext(userObj);
+    return this.mockUserContext;
+  };
 
   // 發送 RESTful 風格請求至 Aras Server Method 或回退至本地引擎
   ArasApiClient.prototype.request = async function (route = "/api/v1/dashboard/summary", params = {}) {
@@ -984,9 +1291,29 @@
     }
 
     // 使用本地端統計引擎計算回應 (與後端 C# 控制器輸出格式 100% 對齊)
+    var userCtx = this.mockUserContext || buildUserContext({});
+    var effectiveParams = Object.assign({}, params);
+    if (userCtx.is_managed_exec_team && userCtx.team_code) {
+      if (userCtx.is_team_restricted) {
+        effectiveParams.team_id = userCtx.team_code;
+      } else if (!effectiveParams.team_id) {
+        effectiveParams.team_id = userCtx.team_code;
+      }
+    }
+
+    if (route.indexOf("/api/v1/dashboard/user-context") === 0 || route === "GET_USER_CONTEXT") {
+      return {
+        status: "success",
+        user_context: userCtx
+      };
+    }
+
     if (route.indexOf("/api/v1/dashboard/team-summary") === 0 || route === "GET_TEAM_SUMMARY") {
-      var stateFilter = String(params.state || "Active").toLowerCase();
-      var typeFilter = String(params.project_type || "1.Standard,2.Professional");
+      var stateFilter = String(effectiveParams.state || "Active").toLowerCase();
+      var typeFilter = String(effectiveParams.project_type || "1.Standard,2.Professional");
+      var territoryFilter = String(effectiveParams.territory || "ALL").trim();
+      var teamFilter = String(effectiveParams.team_id || "ALL").trim();
+      var keyword = String(effectiveParams.keyword || "").trim().toLowerCase();
       var allowedTypes = typeFilter.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
 
       var teamKeys = ["TPS", "ICS", "PMO", "SUS", "SHS", "Other"];
@@ -999,11 +1326,26 @@
         var pState = String(p.state || "").toLowerCase();
         if (stateFilter !== "all" && pState !== stateFilter) return;
         if (typeFilter !== "ALL" && allowedTypes.length > 0 && allowedTypes.indexOf(p.project_type) < 0) return;
+        if (territoryFilter && territoryFilter !== "ALL" && p.territory !== territoryFilter) return;
+        var pTeam = normalizeTeamCode(p.team_id, p.team_name);
+        if (teamFilter && teamFilter !== "ALL") {
+          if (teamFilter === "Other") {
+            if (["TPS", "ICS", "PMO", "SUS", "SHS"].indexOf(pTeam) >= 0) return;
+          } else if (pTeam !== teamFilter) {
+            return;
+          }
+        }
+        if (keyword) {
+          var mNum = String(p.proj_num || "").indexOf(keyword) >= 0;
+          var mName = String(p.project_name || "").toLowerCase().indexOf(keyword) >= 0;
+          var mPm = String(p.pm_name || "").toLowerCase().indexOf(keyword) >= 0;
+          var mCust = String(p.customer_name || "").toLowerCase().indexOf(keyword) >= 0;
+          if (!mNum && !mName && !mPm && !mCust) return;
+        }
 
         totalActive++;
-        var tid = p.team_id || "";
-        if (counts.hasOwnProperty(tid)) {
-          counts[tid]++;
+        if (counts.hasOwnProperty(pTeam)) {
+          counts[pTeam]++;
         } else {
           counts["Other"]++;
         }
@@ -1013,6 +1355,7 @@
         return {
           team_id: key,
           team_name: teamNames[idx],
+          project_count: counts[key] || 0,
           active_count: counts[key] || 0,
           color: teamColors[idx]
         };
@@ -1021,38 +1364,56 @@
       return {
         status: "success",
         route: "/api/v1/dashboard/team-summary",
+        user_context: userCtx,
+        effective_team_filter: effectiveParams.team_id || "ALL",
+        total_projects: totalActive,
         total_active_projects: totalActive,
         teams: teams
       };
     }
 
     if (route.indexOf("/api/v1/dashboard/project") === 0 || route === "GET_PROJECT_DETAIL") {
-      var targetNum = Number(params.proj_num || 0);
+      var targetNum = Number(effectiveParams.proj_num || 0);
       var found = this.mockProjects.find(function (p) { return p.proj_num === targetNum; }) || this.mockProjects[0];
+      var singleAssignees = aggregateCrossProjectAssignees([found], { proj_num: found.proj_num, state: "ALL", project_type: "ALL", team_id: "ALL" });
       return {
         status: "success",
         project: found,
         wbs_items: found.wbs_items || [],
-        assignees: found.assignees || []
+        assignees: singleAssignees
       };
     }
 
     if (route.indexOf("/api/v1/dashboard/assignees") === 0 || route === "GET_ASSIGNEE_WORKLOAD") {
+      var aggList = aggregateCrossProjectAssignees(this.mockProjects, effectiveParams);
+      var totalRepHrs = Number(aggList.reduce(function (acc, a) { return acc + safeNumber(a.reported_work_hours, 0); }, 0).toFixed(1));
+      var totalRepDays = Number((totalRepHrs / 8.0).toFixed(2));
       return {
         status: "success",
-        assignees: aggregateCrossProjectAssignees(this.mockProjects, params)
+        user_context: userCtx,
+        effective_team_filter: effectiveParams.team_id || "ALL",
+        total_reported_hours: totalRepHrs,
+        total_reported_days: totalRepDays,
+        assignees: aggList
       };
     }
 
-    return buildSummaryFromProjects(this.mockProjects, params);
+    var sumRes = buildSummaryFromProjects(this.mockProjects, effectiveParams);
+    sumRes.user_context = userCtx;
+    sumRes.effective_team_filter = effectiveParams.team_id || "ALL";
+    return sumRes;
   };
 
   var exported = {
     ArasApiClient: ArasApiClient,
     DEFAULT_MOCK_PROJECTS: DEFAULT_MOCK_PROJECTS,
+    COMMON_NL_PROMPT_CHIPS: COMMON_NL_PROMPT_CHIPS,
     normalizeStatusColor: normalizeStatusColor,
     safeNumber: safeNumber,
     normalizeTeamCode: normalizeTeamCode,
+    buildUserContext: buildUserContext,
+    parseNaturalLanguageQuery: parseNaturalLanguageQuery,
+    openProjectItemInAras: openProjectItemInAras,
     escapeXml: escapeXml,
     buildSummaryFromProjects: buildSummaryFromProjects,
     aggregateCrossProjectAssignees: aggregateCrossProjectAssignees

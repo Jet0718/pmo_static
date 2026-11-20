@@ -3,10 +3,14 @@
 ## 1. 專案背景與目標
 本專案針對公司 BDM 系統 (`https://bco.openplm.com.tw/innovatorbw`，資料庫：`BWCS-CRM`，平台版本：**Aras Innovator 12 SP9**) 中之專案管理模組 (`Program Management`：`Project` / `WBS Element` / `Sub WBS` / `WBS Activity2` / `Activity2` / `Activity2 Assignment`)，打造獨立的**全域多專案進度分析總覽儀表板 (TOC View Dashboard)** 與單一專案下鑽分析功能。
 
-本系統同時融合貴司 `Project` ItemType 客製化屬性（`cn_*` / `bcs_*` / `percent_compl_1~12` / `status_1~12`）與 `C:\TEST\pmomonthly` 之 RESTful API 設計理念，提供核心統計指標：
-1. **專案整體完成率 (%)、EVM 指標 (`cn_spi` / `cn_cpi` / `cn_sv` / `cn_cv`) 與健康度燈號 (綠/黃/紅燈)**
-2. **各階段 (Ph 1~12 里程碑燈號與 `WBS Element` 主階段) 的進度達成率與時程偏差分析**
-3. **專案成員 (Assignee / `owned_by_id` / `managed_by_id` / `Activity2 Assignment`) 的任務負荷與完成狀態統計**
+本系統同時融合貴司 `Project` ItemType 客製化屬性（`cn_*` / `bcs_*` / `percent_compl_1~12` / `status_1~12`）、`User` 權限屬性（`team_id` / `value_score`）、`workingtime_record` 工時回報記錄與 `C:\TEST\pmomonthly` 之 RESTful API 設計理念，提供核心統計指標：
+1. **自然語言 NoUI 智慧篩選與使用者團隊權限預讀控管 (`user.team_id.keyed_name` & `user.value_score`)**：
+   - 完全以自然語言輸入框取代傳統下拉表單，預設保留 `project_type = 1.Standard, 2.Professional` 且 `state = Active`，並提供常用篩選條件提示標籤 (Prompt Chips)。
+   - 自動預讀當前登入使用者之 `team_id/@keyed_name` 與 `value_score`：若所屬團隊為 `TPS`、`SUS`、`SHS` 或 `ICS`，自動加入 `project.team_id` 符合條件；若其 `value_score` 不等於 `V9` 且不等於 `V10`，則強制鎖定僅能查詢自身執行團隊。
+2. **專案整體完成率 (%)、EVM 指標 (`cn_spi` / `cn_cpi` / `cn_sv` / `cn_cv`)、健康度燈號 (綠/黃/紅燈) 與 Aras 原生專案開啟 (`uiShowItem` Item Icon)**
+3. **各階段 (Ph 1~12 里程碑燈號與 `WBS Element` 主階段) 的進度達成率與時程偏差分析**
+4. **專案成員任務負荷統計與工時回報統計 (`workingtime_record` & `Activity2`)**：
+   - 統計當前篩選條件下，各成員回報任務的工時統計總值，並在成員任務負荷統計中整併顯示使用者工時回報總值（附帶下鑽超連結，可開啟浮層深入檢視該員在各專案的回報總工時 `hr` 與總工天 `工時 / 8`）。
 
 ## 2. 專案目錄與領域劃分
 本專案分為三大領域，各自維護獨立的領域規則與文件：

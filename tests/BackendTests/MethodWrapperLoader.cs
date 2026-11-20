@@ -1,4 +1,4 @@
-public class ArasMethodWrapper : Item
+﻿public class ArasMethodWrapper : Item
 {
     public Item methodCode()
 {
@@ -64,8 +64,12 @@ public class AnalyticsQueryDto
     public string HealthFilter { get; set; }
     // 關鍵字搜尋 (比對專案編號或專案名稱)
     public string Keyword { get; set; }
+    // 自然語言查詢原句 (NoUI 自然語言輸入字串)
+    public string NaturalQuery { get; set; }
     // 指定查詢之專案編號 (project_number)
     public int ProjNum { get; set; }
+    // 是否由客戶端顯式傳入 team_id 參數
+    public bool HasExplicitTeamId { get; set; }
 
     /// <summary>
     /// 建構函式：初始化預設查詢條件
@@ -80,8 +84,101 @@ public class AnalyticsQueryDto
         this.PmId = "ALL";
         this.HealthFilter = "ALL";
         this.Keyword = "";
+        this.NaturalQuery = "";
         this.ProjNum = 0;
+        this.HasExplicitTeamId = false;
     }
+}
+
+/// <summary>
+/// 當前登入使用者權限與執行團隊預讀資訊 DTO (對應 User.team_id.keyed_name 與 User.value_score)
+/// </summary>
+public class UserContextDto
+{
+    // 使用者 Aras User GUID
+    public string UserId { get; set; }
+    // 登入帳號 (login_name)
+    public string LoginName { get; set; }
+    // 顯示姓名 (keyed_name)
+    public string UserName { get; set; }
+    // 使用者所屬團隊 GUID (user.team_id)
+    public string TeamId { get; set; }
+    // 使用者所屬團隊名稱 (user.team_id.keyed_name)
+    public string RawTeamKeyedName { get; set; }
+    // 正規化後之團隊代碼 (TPS / SUS / SHS / ICS / PMO / Other)
+    public string TeamCode { get; set; }
+    // 使用者職等分數 (user.value_score，如 V8 / V9 / V10)
+    public string ValueScore { get; set; }
+    // 是否屬於四大受管執行團隊 (TPS / SUS / SHS / ICS)
+    public bool IsManagedExecTeam { get; set; }
+    // 是否為高階職等 (value_score == V9 或 V10)
+    public bool IsHighPrivilegeScore { get; set; }
+    // 是否限制僅能查詢自身所屬執行團隊 (當 IsManagedExecTeam 為 true 且 IsHighPrivilegeScore 為 false 時為 true)
+    public bool IsTeamRestricted { get; set; }
+    // 預設帶入之執行團隊篩選值 (若 IsManagedExecTeam 為 true 則為 TeamCode，否則為 ALL)
+    public string DefaultTeamFilter { get; set; }
+
+    /// <summary>
+    /// 建構函式：初始化預設不受限之使用者上下文
+    /// </summary>
+    public UserContextDto()
+    {
+        this.UserId = "";
+        this.LoginName = "";
+        this.UserName = "";
+        this.TeamId = "";
+        this.RawTeamKeyedName = "";
+        this.TeamCode = "";
+        this.ValueScore = "";
+        this.IsManagedExecTeam = false;
+        this.IsHighPrivilegeScore = false;
+        this.IsTeamRestricted = false;
+        this.DefaultTeamFilter = "ALL";
+    }
+}
+
+/// <summary>
+/// 工時回報記錄實體模型 (對應 Aras workingtime_record ItemType)
+/// </summary>
+public class WorkTimeRecordEntry
+{
+    // workingtime_record GUID
+    public string Id { get; set; }
+    // 所屬專案 GUID (project)
+    public string ProjectId { get; set; }
+    // 所屬專案編號 (由 Project 映射或 keyed_name 解析)
+    public int ProjNum { get; set; }
+    // 所屬專案名稱
+    public string ProjectName { get; set; }
+    // 回報對應之任務名稱 (cn_act2)
+    public string ActivityName { get; set; }
+    // 回報人員 Identity ID (owned_by_id)
+    public string MemberId { get; set; }
+    // 回報人員顯示姓名 (owned_by_id/@keyed_name)
+    public string MemberName { get; set; }
+    // 回報工時數 (work_hour)
+    public double WorkHours { get; set; }
+    // 工作日期字串 (work_date)
+    public string WorkDate { get; set; }
+}
+
+/// <summary>
+/// 專案成員在單一專案之工時回報彙總明細 DTO (供點擊使用者工時連結下鑽檢視各專案總工時/工天)
+/// </summary>
+public class ProjectWorkTimeBreakdownDto
+{
+    // 專案 Aras 32碼 GUID (供點擊左側 Item Icon 開啟 Aras Project 畫面)
+    public string ProjectId { get; set; }
+    // 專案編號 (project_number)
+    public int ProjNum { get; set; }
+    // 專案名稱 (name)
+    public string ProjectName { get; set; }
+    // 該成員於本專案回報之總工時 (hr)
+    public double ReportedHours { get; set; }
+    // 該成員於本專案回報之總工天 (ReportedHours / 8.0，四捨五入至小數點後 2 位)
+    public double ReportedDays { get; set; }
+    // 回報記錄筆數或任務數
+    public int RecordCount { get; set; }
 }
 
 /// <summary>
@@ -437,7 +534,7 @@ public class WbsStageAnalyticsDto
 }
 
 /// <summary>
-/// 專案成員 (Assignee) 任務負荷與完成狀態統計 DTO
+/// 專案成員 (Assignee) 任務負荷、完成狀態與工時回報統計 DTO
 /// </summary>
 public class AssigneeWorkloadDto
 {
@@ -467,10 +564,21 @@ public class AssigneeWorkloadDto
     public double TotalActualHours { get; set; }
     // 剩餘未完成預估工時 (hr)
     public double RemainingEstHours { get; set; }
+    // 使用者工時回報統計總工時 (hr)
+    public double ReportedWorkHours { get; set; }
+    // 使用者工時回報統計總工天 (ReportedWorkHours / 8.0)
+    public double ReportedWorkDays { get; set; }
     // 負荷狀態等級 (OVERLOAD / HIGH / NORMAL / LOW)
     public string LoadLevel { get; set; }
     // 參與之專案數量
     public int ProjectCount { get; set; }
+    // 該成員在各專案的工時回報總工時/工天明細清單
+    public System.Collections.Generic.List<ProjectWorkTimeBreakdownDto> ProjectWorkTimeBreakdowns { get; set; }
+
+    public AssigneeWorkloadDto()
+    {
+        this.ProjectWorkTimeBreakdowns = new System.Collections.Generic.List<ProjectWorkTimeBreakdownDto>();
+    }
 }
 
 // ============================================================================
@@ -482,10 +590,12 @@ public class AssigneeWorkloadDto
 /// </summary>
 public interface IProjectRepository
 {
+    UserContextDto GetCurrentUserContext();
     System.Collections.Generic.List<ProjectRecord> GetProjects(AnalyticsQueryDto query);
     ProjectRecord GetProjectByNumber(int projNum);
     System.Collections.Generic.List<WbsRecord> GetWbsHierarchy(System.Collections.Generic.List<int> projNums, System.Collections.Generic.List<string> rootWbsIds);
     System.Collections.Generic.List<ActivityRecord> GetActivitiesWithAssignments(System.Collections.Generic.List<int> projNums);
+    System.Collections.Generic.List<WorkTimeRecordEntry> GetWorkTimeRecords(System.Collections.Generic.List<ProjectRecord> projects);
 }
 
 /// <summary>
@@ -532,12 +642,18 @@ public interface IWbsStageAnalyzer
 }
 
 /// <summary>
-/// 專案成員工作負荷統計器介面
+/// 專案成員工作負荷與工時回報統計器介面
 /// </summary>
 public interface IWorkloadAggregator
 {
     System.Collections.Generic.List<AssigneeWorkloadDto> AggregateByAssignee(
         System.Collections.Generic.List<ActivityRecord> activities,
+        System.DateTime asOfDate
+    );
+    System.Collections.Generic.List<AssigneeWorkloadDto> AggregateByAssigneeWithWorkTime(
+        System.Collections.Generic.List<ProjectRecord> projects,
+        System.Collections.Generic.List<ActivityRecord> activities,
+        System.Collections.Generic.List<WorkTimeRecordEntry> workTimeRecords,
         System.DateTime asOfDate
     );
 }
@@ -1391,101 +1507,287 @@ public class WbsStageAnalyzer : IWbsStageAnalyzer
 }
 
 /// <summary>
-/// 專案成員 (Assignee) 任務負荷與完成狀態彙總服務
+/// 專案成員 (Assignee) 任務負荷、完成狀態與工時回報統計服務
 /// </summary>
 public class WorkloadAggregator : IWorkloadAggregator
 {
     /// <summary>
-    /// 依指派成員 (Assignee) 分組統計各狀態任務數、完成率、逾期率與預估/實際工時負荷
+    /// 依指派成員 (Assignee) 分組統計各狀態任務數、完成率、逾期率與預估/實際工時負荷 (無額外工時回報表時之回退相容介面)
     /// </summary>
     public System.Collections.Generic.List<AssigneeWorkloadDto> AggregateByAssignee(
         System.Collections.Generic.List<ActivityRecord> activities,
         System.DateTime asOfDate
     )
     {
+        return AggregateByAssigneeWithWorkTime(null, activities, null, asOfDate);
+    }
+
+    /// <summary>
+    /// 整合專案清單、Activity2 任務與 workingtime_record 工時回報記錄，統計各成員任務負荷及跨專案工時/工天回報明細
+    /// </summary>
+    public System.Collections.Generic.List<AssigneeWorkloadDto> AggregateByAssigneeWithWorkTime(
+        System.Collections.Generic.List<ProjectRecord> projects,
+        System.Collections.Generic.List<ActivityRecord> activities,
+        System.Collections.Generic.List<WorkTimeRecordEntry> workTimeRecords,
+        System.DateTime asOfDate
+    )
+    {
         System.Collections.Generic.List<AssigneeWorkloadDto> result =
             new System.Collections.Generic.List<AssigneeWorkloadDto>();
-        if (activities == null || activities.Count == 0)
+
+        // 建立專案編號與專案 GUID 之映射字典 (供組裝各專案工時回報明細與開啟 Aras 專案畫面)
+        System.Collections.Generic.Dictionary<int, ProjectRecord> projByNum =
+            new System.Collections.Generic.Dictionary<int, ProjectRecord>();
+        System.Collections.Generic.Dictionary<string, ProjectRecord> projById =
+            new System.Collections.Generic.Dictionary<string, ProjectRecord>(System.StringComparer.OrdinalIgnoreCase);
+
+        if (projects != null)
         {
-            return result;
+            for (int i = 0; i < projects.Count; i++)
+            {
+                ProjectRecord pr = projects[i];
+                if (pr == null) continue;
+                if (pr.ProjNum > 0 && !projByNum.ContainsKey(pr.ProjNum))
+                {
+                    projByNum[pr.ProjNum] = pr;
+                }
+                if (!string.IsNullOrEmpty(pr.Id) && !projById.ContainsKey(pr.Id))
+                {
+                    projById[pr.Id] = pr;
+                }
+            }
         }
 
         System.Collections.Generic.Dictionary<string, AssigneeWorkloadDto> map =
-            new System.Collections.Generic.Dictionary<string, AssigneeWorkloadDto>();
+            new System.Collections.Generic.Dictionary<string, AssigneeWorkloadDto>(System.StringComparer.OrdinalIgnoreCase);
+        // 姓名反查 Key，避免 workingtime_record 與 Activity2 使用不同 Identity ID 但同一姓名時分裂
+        System.Collections.Generic.Dictionary<string, string> nameToKeyMap =
+            new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
         System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<int>> projSetMap =
-            new System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<int>>();
+            new System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<int>>(System.StringComparer.OrdinalIgnoreCase);
 
-        for (int i = 0; i < activities.Count; i++)
+        // 記錄每位成員在各專案由 Activity2 任務滾算之實報工時 (當該成員無 workingtime_record 時作為回退明細)
+        System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto>> actWorkBreakdownMap =
+            new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto>>(System.StringComparer.OrdinalIgnoreCase);
+
+        if (activities != null)
         {
-            ActivityRecord act = activities[i];
-            // 扣除里程碑任務 (is_milestone == '1') 忽略不計，僅統計實際工作任務之指派成員
-            if (act == null || act.IsMilestone) continue;
-
-            string assigneeId = string.IsNullOrEmpty(act.AssigneeId) ? "UNASSIGNED" : act.AssigneeId;
-            string assigneeName = string.IsNullOrEmpty(act.AssigneeName)
-                ? (assigneeId == "UNASSIGNED" ? "未指派成員" : assigneeId)
-                : act.AssigneeName;
-
-            if (!map.ContainsKey(assigneeId))
+            for (int i = 0; i < activities.Count; i++)
             {
-                AssigneeWorkloadDto item = new AssigneeWorkloadDto();
-                item.AssigneeId = assigneeId;
-                item.AssigneeName = assigneeName;
-                map[assigneeId] = item;
-                projSetMap[assigneeId] = new System.Collections.Generic.HashSet<int>();
-            }
+                ActivityRecord act = activities[i];
+                // 扣除里程碑任務 (is_milestone == '1') 忽略不計，僅統計實際工作任務之指派成員
+                if (act == null || act.IsMilestone) continue;
 
-            AssigneeWorkloadDto dto = map[assigneeId];
-            if (act.ProjNum > 0)
-            {
-                projSetMap[assigneeId].Add(act.ProjNum);
-            }
+                string assigneeId = string.IsNullOrEmpty(act.AssigneeId) ? "UNASSIGNED" : act.AssigneeId.Trim();
+                string assigneeName = string.IsNullOrEmpty(act.AssigneeName)
+                    ? (assigneeId == "UNASSIGNED" ? "未指派成員" : assigneeId)
+                    : act.AssigneeName.Trim();
 
-            dto.TotalTasks++;
-            if (act.IsCritical)
-            {
-                dto.CriticalTasks++;
-            }
-
-            bool isDone = ProjectHealthCalculator.IsActivityCompleted(act);
-            bool isOverdue = !isDone && ProjectHealthCalculator.IsActivityOverdue(act, asOfDate);
-
-            if (isDone)
-            {
-                dto.CompletedTasks++;
-            }
-            else
-            {
-                if (isOverdue)
+                if (!map.ContainsKey(assigneeId))
                 {
-                    dto.OverdueTasks++;
+                    AssigneeWorkloadDto item = new AssigneeWorkloadDto();
+                    item.AssigneeId = assigneeId;
+                    item.AssigneeName = assigneeName;
+                    map[assigneeId] = item;
+                    projSetMap[assigneeId] = new System.Collections.Generic.HashSet<int>();
+                    actWorkBreakdownMap[assigneeId] = new System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto>();
+                    if (!string.IsNullOrEmpty(assigneeName) && !nameToKeyMap.ContainsKey(assigneeName))
+                    {
+                        nameToKeyMap[assigneeName] = assigneeId;
+                    }
                 }
-                if (act.PercentCompl > 0 || ProjectHealthCalculator.IsStatusInProgress(act))
+
+                AssigneeWorkloadDto dto = map[assigneeId];
+                if (act.ProjNum > 0)
                 {
-                    dto.InProgressTasks++;
+                    projSetMap[assigneeId].Add(act.ProjNum);
+                }
+
+                dto.TotalTasks++;
+                if (act.IsCritical)
+                {
+                    dto.CriticalTasks++;
+                }
+
+                bool isDone = ProjectHealthCalculator.IsActivityCompleted(act);
+                bool isOverdue = !isDone && ProjectHealthCalculator.IsActivityOverdue(act, asOfDate);
+
+                if (isDone)
+                {
+                    dto.CompletedTasks++;
                 }
                 else
                 {
-                    dto.NotStartedTasks++;
+                    if (isOverdue)
+                    {
+                        dto.OverdueTasks++;
+                    }
+                    if (act.PercentCompl > 0 || ProjectHealthCalculator.IsStatusInProgress(act))
+                    {
+                        dto.InProgressTasks++;
+                    }
+                    else
+                    {
+                        dto.NotStartedTasks++;
+                    }
+                }
+
+                dto.TotalEstHours += act.WorkEst;
+                dto.TotalActualHours += act.ActualWork;
+                if (!isDone && act.WorkEst > 0)
+                {
+                    double remainRatio = (100.0 - ProjectHealthCalculator.ClampPercent(act.PercentCompl)) / 100.0;
+                    dto.RemainingEstHours += act.WorkEst * remainRatio;
+                }
+
+                // 累計該成員在該專案之 Activity2 實報工時明細
+                if (act.ProjNum > 0 && act.ActualWork > 0)
+                {
+                    System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto> pMap = actWorkBreakdownMap[assigneeId];
+                    if (!pMap.ContainsKey(act.ProjNum))
+                    {
+                        ProjectRecord pr = projByNum.ContainsKey(act.ProjNum) ? projByNum[act.ProjNum] : null;
+                        ProjectWorkTimeBreakdownDto bDto = new ProjectWorkTimeBreakdownDto();
+                        bDto.ProjNum = act.ProjNum;
+                        bDto.ProjectId = pr != null ? (pr.Id ?? "") : "";
+                        bDto.ProjectName = pr != null ? (pr.Name ?? ("專案 " + act.ProjNum.ToString())) : ("專案 " + act.ProjNum.ToString());
+                        bDto.ReportedHours = 0.0;
+                        bDto.RecordCount = 0;
+                        pMap[act.ProjNum] = bDto;
+                    }
+                    pMap[act.ProjNum].ReportedHours += act.ActualWork;
+                    pMap[act.ProjNum].RecordCount++;
                 }
             }
+        }
 
-            dto.TotalEstHours += act.WorkEst;
-            dto.TotalActualHours += act.ActualWork;
-            if (!isDone && act.WorkEst > 0)
+        // 聚合 workingtime_record 工時回報記錄
+        System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto>> wtBreakdownMap =
+            new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto>>(System.StringComparer.OrdinalIgnoreCase);
+
+        if (workTimeRecords != null && workTimeRecords.Count > 0)
+        {
+            for (int i = 0; i < workTimeRecords.Count; i++)
             {
-                double remainRatio = (100.0 - ProjectHealthCalculator.ClampPercent(act.PercentCompl)) / 100.0;
-                dto.RemainingEstHours += act.WorkEst * remainRatio;
+                WorkTimeRecordEntry wt = workTimeRecords[i];
+                if (wt == null || wt.WorkHours <= 0) continue;
+
+                string memberId = (wt.MemberId ?? "").Trim();
+                string memberName = (wt.MemberName ?? "").Trim();
+                if (string.IsNullOrEmpty(memberId) && string.IsNullOrEmpty(memberName)) continue;
+
+                string targetKey = memberId;
+                if (string.IsNullOrEmpty(targetKey) || !map.ContainsKey(targetKey))
+                {
+                    if (!string.IsNullOrEmpty(memberName) && nameToKeyMap.ContainsKey(memberName))
+                    {
+                        targetKey = nameToKeyMap[memberName];
+                    }
+                    else if (string.IsNullOrEmpty(targetKey))
+                    {
+                        targetKey = memberName;
+                    }
+                }
+
+                if (!map.ContainsKey(targetKey))
+                {
+                    AssigneeWorkloadDto newMember = new AssigneeWorkloadDto();
+                    newMember.AssigneeId = targetKey;
+                    newMember.AssigneeName = string.IsNullOrEmpty(memberName) ? targetKey : memberName;
+                    map[targetKey] = newMember;
+                    projSetMap[targetKey] = new System.Collections.Generic.HashSet<int>();
+                    actWorkBreakdownMap[targetKey] = new System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto>();
+                    if (!string.IsNullOrEmpty(newMember.AssigneeName) && !nameToKeyMap.ContainsKey(newMember.AssigneeName))
+                    {
+                        nameToKeyMap[newMember.AssigneeName] = targetKey;
+                    }
+                }
+
+                if (!wtBreakdownMap.ContainsKey(targetKey))
+                {
+                    wtBreakdownMap[targetKey] = new System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto>();
+                }
+
+                int pNum = wt.ProjNum;
+                string pId = wt.ProjectId ?? "";
+                string pName = wt.ProjectName ?? "";
+                if (pNum <= 0 && !string.IsNullOrEmpty(pId) && projById.ContainsKey(pId))
+                {
+                    pNum = projById[pId].ProjNum;
+                    pName = projById[pId].Name;
+                }
+                else if (pNum > 0 && projByNum.ContainsKey(pNum))
+                {
+                    if (string.IsNullOrEmpty(pId)) pId = projByNum[pNum].Id;
+                    if (string.IsNullOrEmpty(pName)) pName = projByNum[pNum].Name;
+                }
+
+                if (pNum > 0)
+                {
+                    projSetMap[targetKey].Add(pNum);
+                    System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto> mProjMap = wtBreakdownMap[targetKey];
+                    if (!mProjMap.ContainsKey(pNum))
+                    {
+                        ProjectWorkTimeBreakdownDto bDto = new ProjectWorkTimeBreakdownDto();
+                        bDto.ProjNum = pNum;
+                        bDto.ProjectId = pId;
+                        bDto.ProjectName = string.IsNullOrEmpty(pName) ? ("專案 " + pNum.ToString()) : pName;
+                        bDto.ReportedHours = 0.0;
+                        bDto.RecordCount = 0;
+                        mProjMap[pNum] = bDto;
+                    }
+                    mProjMap[pNum].ReportedHours += wt.WorkHours;
+                    mProjMap[pNum].RecordCount++;
+                }
             }
         }
 
         foreach (System.Collections.Generic.KeyValuePair<string, AssigneeWorkloadDto> kv in map)
         {
+            string key = kv.Key;
             AssigneeWorkloadDto dto = kv.Value;
-            dto.ProjectCount = projSetMap[kv.Key].Count;
+            dto.ProjectCount = projSetMap[key].Count;
             dto.TotalEstHours = System.Math.Round(dto.TotalEstHours, 1);
             dto.TotalActualHours = System.Math.Round(dto.TotalActualHours, 1);
             dto.RemainingEstHours = System.Math.Round(dto.RemainingEstHours, 1);
+
+            // 組裝該成員各專案工時回報明細 (優先取 workingtime_record 明細，若該員無 workingtime_record 則取 Activity2 實報工時明細)
+            System.Collections.Generic.Dictionary<int, ProjectWorkTimeBreakdownDto> sourceBreakdown =
+                (wtBreakdownMap.ContainsKey(key) && wtBreakdownMap[key].Count > 0)
+                    ? wtBreakdownMap[key]
+                    : (actWorkBreakdownMap.ContainsKey(key) ? actWorkBreakdownMap[key] : null);
+
+            double totalReportedHrs = 0.0;
+            if (sourceBreakdown != null && sourceBreakdown.Count > 0)
+            {
+                foreach (System.Collections.Generic.KeyValuePair<int, ProjectWorkTimeBreakdownDto> bKv in sourceBreakdown)
+                {
+                    ProjectWorkTimeBreakdownDto bItem = bKv.Value;
+                    bItem.ReportedHours = System.Math.Round(bItem.ReportedHours, 1);
+                    bItem.ReportedDays = System.Math.Round(bItem.ReportedHours / 8.0, 2);
+                    totalReportedHrs += bItem.ReportedHours;
+                    dto.ProjectWorkTimeBreakdowns.Add(bItem);
+                }
+                // 按該專案回報工時降冪排序
+                dto.ProjectWorkTimeBreakdowns.Sort(delegate(ProjectWorkTimeBreakdownDto x, ProjectWorkTimeBreakdownDto y)
+                {
+                    int cmp = y.ReportedHours.CompareTo(x.ReportedHours);
+                    if (cmp != 0) return cmp;
+                    return y.ProjNum.CompareTo(x.ProjNum);
+                });
+            }
+            else if (dto.TotalActualHours > 0)
+            {
+                totalReportedHrs = dto.TotalActualHours;
+            }
+
+            dto.ReportedWorkHours = System.Math.Round(totalReportedHrs, 1);
+            dto.ReportedWorkDays = System.Math.Round(dto.ReportedWorkHours / 8.0, 2);
+            if (dto.TotalActualHours <= 0 && dto.ReportedWorkHours > 0)
+            {
+                dto.TotalActualHours = dto.ReportedWorkHours;
+            }
+
             dto.CompletionRate = dto.TotalTasks > 0
                 ? System.Math.Round(((double)dto.CompletedTasks / (double)dto.TotalTasks) * 100.0, 1)
                 : 0.0;
@@ -1514,12 +1816,14 @@ public class WorkloadAggregator : IWorkloadAggregator
             result.Add(dto);
         }
 
-        // 依逾期任務數降冪、總任務數降冪排序
+        // 依逾期任務數降冪、總任務數降冪、工時回報總值降冪排序
         result.Sort(delegate(AssigneeWorkloadDto a, AssigneeWorkloadDto b)
         {
             int cmp = b.OverdueTasks.CompareTo(a.OverdueTasks);
             if (cmp != 0) return cmp;
-            return b.TotalTasks.CompareTo(a.TotalTasks);
+            int tCmp = b.TotalTasks.CompareTo(a.TotalTasks);
+            if (tCmp != 0) return tCmp;
+            return b.ReportedWorkHours.CompareTo(a.ReportedWorkHours);
         });
 
         return result;
@@ -1536,20 +1840,142 @@ public class WorkloadAggregator : IWorkloadAggregator
 public class ArasProjectRepository : IProjectRepository
 {
     /// <summary>
-    /// 正規化執行團隊代碼：優先比對 TeamName / keyed_name，若無則比對 TeamId
+    /// 正規化執行團隊代碼：支援雙參數無序傳入與 BDM 團隊 GUID 映射字典
     /// 精確歸納至 TPS, ICS, PMO, SUS, SHS，無法對應者歸為 Other
     /// </summary>
     public static string NormalizeTeamCode(string teamName, string teamId)
     {
-        string s = (!string.IsNullOrEmpty(teamName) ? teamName : (teamId ?? "")).Trim();
-        if (string.IsNullOrEmpty(s)) return "Other";
-        string upper = s.ToUpperInvariant();
-        if (upper.Contains("TPS")) return "TPS";
-        if (upper.Contains("ICS")) return "ICS";
-        if (upper.Contains("PMO")) return "PMO";
-        if (upper.Contains("SUS")) return "SUS";
-        if (upper.Contains("SHS")) return "SHS";
+        string s1 = (teamName ?? "").Trim();
+        string s2 = (teamId ?? "").Trim();
+        if (string.IsNullOrEmpty(s1) && string.IsNullOrEmpty(s2)) return "Other";
+
+        string u1 = s1.ToUpperInvariant();
+        string u2 = s2.ToUpperInvariant();
+
+        // 1. 比對已知 BDM 團隊 GUID
+        if (u1 == "604F804DDA84451CA3B6CB54CD905BC9" || u2 == "604F804DDA84451CA3B6CB54CD905BC9") return "TPS";
+        if (u1 == "0DE0880740CF41E68518D86891A9B83A" || u2 == "0DE0880740CF41E68518D86891A9B83A") return "ICS";
+        if (u1 == "CDE4225D27224672B7CDDD497486C5AA" || u2 == "CDE4225D27224672B7CDDD497486C5AA") return "PMO";
+        if (u1 == "ABBACF8E3BEB4D87AFFE86D1608BA5E3" || u2 == "ABBACF8E3BEB4D87AFFE86D1608BA5E3") return "SUS";
+        if (u1 == "BF5B92B912DD4865966731F946091ABA" || u2 == "BF5B92B912DD4865966731F946091ABA") return "SHS";
+
+        // 2. 比對文字代碼
+        string combined = u1 + " " + u2;
+        if (combined.Contains("TPS")) return "TPS";
+        if (combined.Contains("ICS")) return "ICS";
+        if (combined.Contains("PMO")) return "PMO";
+        if (combined.Contains("SUS")) return "SUS";
+        if (combined.Contains("SHS")) return "SHS";
         return "Other";
+    }
+
+    /// <summary>
+    /// 依據使用者團隊名稱與 value_score 建構使用者權限上下文 (供實機與單元測試共用)
+    /// 規則：
+    /// 1. 若 user.team_id.keyed_name 為 TPS / SUS / SHS / ICS，則 IsManagedExecTeam = true，預設篩選條件加上該執行團隊 (DefaultTeamFilter = TeamCode)。
+    /// 2. 若符合上述執行團隊，且 user.value_score 不等於 V9 且不等於 V10，則 IsTeamRestricted = true (限制查詢其他執行團隊)。
+    /// </summary>
+    public static UserContextDto BuildUserContextFromFields(
+        string userId,
+        string loginName,
+        string userName,
+        string teamId,
+        string teamKeyedName,
+        string valueScore
+    )
+    {
+        UserContextDto ctx = new UserContextDto();
+        ctx.UserId = (userId ?? "").Trim();
+        ctx.LoginName = (loginName ?? "").Trim();
+        ctx.UserName = (userName ?? "").Trim();
+        ctx.TeamId = (teamId ?? "").Trim();
+        ctx.RawTeamKeyedName = (teamKeyedName ?? "").Trim();
+        ctx.ValueScore = (valueScore ?? "").Trim().ToUpperInvariant();
+
+        string normTeam = NormalizeTeamCode(ctx.RawTeamKeyedName, ctx.TeamId);
+        // 若 RawTeamKeyedName 本身就是非五大團隊的代碼（如 BCO, WHS），保留原名稱但非五大團隊
+        ctx.TeamCode = normTeam;
+
+        bool isFourManagedTeam =
+            string.Equals(normTeam, "TPS", System.StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normTeam, "SUS", System.StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normTeam, "SHS", System.StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normTeam, "ICS", System.StringComparison.OrdinalIgnoreCase);
+
+        bool isV9OrV10 =
+            string.Equals(ctx.ValueScore, "V9", System.StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(ctx.ValueScore, "V10", System.StringComparison.OrdinalIgnoreCase);
+
+        ctx.IsManagedExecTeam = isFourManagedTeam;
+        ctx.IsHighPrivilegeScore = isV9OrV10;
+        ctx.DefaultTeamFilter = isFourManagedTeam ? normTeam : "ALL";
+        ctx.IsTeamRestricted = isFourManagedTeam && !isV9OrV10;
+
+        return ctx;
+    }
+
+    /// <summary>
+    /// 預讀當前登入 Aras 使用者之 team_id.keyed_name 與 value_score 欄位
+    /// </summary>
+    public UserContextDto GetCurrentUserContext()
+    {
+        if (this._inn == null)
+        {
+            return new UserContextDto();
+        }
+
+        try
+        {
+            string currentUserId = this._inn.getUserID();
+            if (string.IsNullOrEmpty(currentUserId))
+            {
+                return new UserContextDto();
+            }
+
+            Item uQry = this._inn.newItem("User", "get");
+            uQry.setID(SanitizeInput(currentUserId));
+            uQry.setAttribute("select", "id,login_name,keyed_name,team_id,value_score");
+            Item uRes = uQry.apply();
+            if (uRes.isError() || uRes.getItemCount() <= 0)
+            {
+                return new UserContextDto();
+            }
+
+            Item uItem = uRes.getItemByIndex(0);
+            string loginName = uItem.getProperty("login_name", "");
+            string userName = uItem.getProperty("keyed_name", loginName);
+            string teamId = uItem.getProperty("team_id", "");
+            string teamKeyedName = uItem.getPropertyAttribute("team_id", "keyed_name", "");
+            string valueScore = uItem.getProperty("value_score", "");
+
+            // 若 team_id 有 GUID 但屬性 keyed_name 未附帶且不在預設字典內，查詢 Team ItemType 取得 keyed_name
+            if (!string.IsNullOrEmpty(teamId) && string.IsNullOrEmpty(teamKeyedName))
+            {
+                string quickCheck = NormalizeTeamCode("", teamId);
+                if (quickCheck != "Other")
+                {
+                    teamKeyedName = quickCheck;
+                }
+                else
+                {
+                    Item tQry = this._inn.newItem("Team", "get");
+                    tQry.setID(SanitizeInput(teamId));
+                    tQry.setAttribute("select", "id,name,keyed_name");
+                    Item tRes = tQry.apply();
+                    if (!tRes.isError() && tRes.getItemCount() > 0)
+                    {
+                        Item tItem = tRes.getItemByIndex(0);
+                        teamKeyedName = tItem.getProperty("keyed_name", tItem.getProperty("name", ""));
+                    }
+                }
+            }
+
+            return BuildUserContextFromFields(currentUserId, loginName, userName, teamId, teamKeyedName, valueScore);
+        }
+        catch (System.Exception)
+        {
+            return new UserContextDto();
+        }
     }
 
     private readonly Innovator _inn;
@@ -1809,7 +2235,7 @@ public class ArasProjectRepository : IProjectRepository
         actQry.setAttribute("select",
             "id,proj_num,name,state,status,is_milestone,is_critical,percent_compl," +
             "date_start_sched,date_due_sched,date_start_act,date_due_act,days_remaining," +
-            "work_est,actual_work,earned_value,planned_value,owned_by_id,managed_by_id,team_id"
+            "work_est,actual_work,rollup_actual_work,earned_value,planned_value,owned_by_id,managed_by_id,team_id"
         );
         actQry.setAttribute("where", "[ACTIVITY2].proj_num IN (" + sbNums.ToString() + ")");
         Item actRes = actQry.apply();
@@ -1844,7 +2270,9 @@ public class ArasProjectRepository : IProjectRepository
             rec.ActFinish = ParseDate(item.getProperty("date_due_act", ""));
             rec.DaysRemaining = ParseNullableInt(item.getProperty("days_remaining", ""));
             rec.WorkEst = ParseDouble(item.getProperty("work_est", "0"), 0.0);
-            rec.ActualWork = ParseDouble(item.getProperty("actual_work", "0"), 0.0);
+            double rollupActWork = ParseDouble(item.getProperty("rollup_actual_work", "0"), 0.0);
+            double rawActWork = ParseDouble(item.getProperty("actual_work", "0"), 0.0);
+            rec.ActualWork = rollupActWork > 0.0 ? rollupActWork : rawActWork;
             rec.EarnedValue = ParseDouble(item.getProperty("earned_value", "0"), 0.0);
             rec.PlannedValue = ParseDouble(item.getProperty("planned_value", "0"), 0.0);
 
@@ -2000,6 +2428,133 @@ public class ArasProjectRepository : IProjectRepository
         }
 
         return actList;
+    }
+
+    /// <summary>
+    /// 查詢指定專案集合下之 workingtime_record 工時回報記錄 (供統計各成員於各專案之回報總工時與工天)
+    /// </summary>
+    public System.Collections.Generic.List<WorkTimeRecordEntry> GetWorkTimeRecords(
+        System.Collections.Generic.List<ProjectRecord> projects
+    )
+    {
+        System.Collections.Generic.List<WorkTimeRecordEntry> list =
+            new System.Collections.Generic.List<WorkTimeRecordEntry>();
+        if (this._inn == null || projects == null || projects.Count == 0)
+        {
+            return list;
+        }
+
+        System.Collections.Generic.List<string> projIdClauses = new System.Collections.Generic.List<string>();
+        System.Collections.Generic.Dictionary<string, ProjectRecord> projById =
+            new System.Collections.Generic.Dictionary<string, ProjectRecord>(System.StringComparer.OrdinalIgnoreCase);
+
+        for (int i = 0; i < projects.Count; i++)
+        {
+            ProjectRecord p = projects[i];
+            if (p == null || string.IsNullOrEmpty(p.Id)) continue;
+            if (!projById.ContainsKey(p.Id))
+            {
+                projById[p.Id] = p;
+                projIdClauses.Add("'" + SanitizeInput(p.Id) + "'");
+            }
+        }
+
+        if (projIdClauses.Count == 0)
+        {
+            return list;
+        }
+
+        Item wtQry = this._inn.newItem("workingtime_record", "get");
+        wtQry.setAttribute("select", "id,source_id,project,cn_act2,work_hour,work_date,owned_by_id,created_by_id");
+        wtQry.setAttribute("where", "[WORKINGTIME_RECORD].project IN (" + string.Join(",", projIdClauses.ToArray()) + ")");
+        Item wtRes = wtQry.apply();
+        if (wtRes.isError())
+        {
+            return list;
+        }
+
+        System.Collections.Generic.List<string> missingIdentityIds = new System.Collections.Generic.List<string>();
+        int count = wtRes.getItemCount();
+        for (int i = 0; i < count; i++)
+        {
+            Item item = wtRes.getItemByIndex(i);
+            double hrs = ParseDouble(item.getProperty("work_hour", "0"), 0.0);
+            if (hrs <= 0.0) continue;
+
+            WorkTimeRecordEntry entry = new WorkTimeRecordEntry();
+            entry.Id = item.getID();
+            entry.ProjectId = item.getProperty("project", "");
+            if (!string.IsNullOrEmpty(entry.ProjectId) && projById.ContainsKey(entry.ProjectId))
+            {
+                entry.ProjNum = projById[entry.ProjectId].ProjNum;
+                entry.ProjectName = projById[entry.ProjectId].Name;
+            }
+            else
+            {
+                entry.ProjectName = item.getPropertyAttribute("project", "keyed_name", "");
+            }
+
+            entry.ActivityName = item.getProperty("cn_act2", "");
+            entry.WorkHours = hrs;
+            entry.WorkDate = item.getProperty("work_date", "");
+
+            string ownerId = item.getProperty("owned_by_id", "");
+            string ownerName = item.getPropertyAttribute("owned_by_id", "keyed_name", "");
+            if (string.IsNullOrEmpty(ownerId) && string.IsNullOrEmpty(ownerName))
+            {
+                ownerId = item.getProperty("created_by_id", "");
+                ownerName = item.getPropertyAttribute("created_by_id", "keyed_name", "");
+            }
+
+            entry.MemberId = ownerId;
+            entry.MemberName = ownerName;
+            if (!string.IsNullOrEmpty(entry.MemberId) && string.IsNullOrEmpty(entry.MemberName))
+            {
+                string safeId = "'" + SanitizeInput(entry.MemberId) + "'";
+                if (!missingIdentityIds.Contains(safeId))
+                {
+                    missingIdentityIds.Add(safeId);
+                }
+            }
+
+            list.Add(entry);
+        }
+
+        // 若 MemberId 有值但 MemberName 為空，批次反查 Identity 或 User 補齊顯示姓名
+        if (missingIdentityIds.Count > 0)
+        {
+            Item idQry = this._inn.newItem("Identity", "get");
+            idQry.setAttribute("select", "id,keyed_name,name");
+            idQry.setAttribute("where", "[IDENTITY].id IN (" + string.Join(",", missingIdentityIds.ToArray()) + ")");
+            Item idRes = idQry.apply();
+            if (!idRes.isError())
+            {
+                System.Collections.Generic.Dictionary<string, string> idNameMap =
+                    new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
+                int idCnt = idRes.getItemCount();
+                for (int k = 0; k < idCnt; k++)
+                {
+                    Item idItem = idRes.getItemByIndex(k);
+                    string iid = idItem.getID();
+                    string iName = idItem.getProperty("keyed_name", idItem.getProperty("name", ""));
+                    if (!string.IsNullOrEmpty(iid) && !string.IsNullOrEmpty(iName))
+                    {
+                        idNameMap[iid] = iName;
+                    }
+                }
+                for (int i = 0; i < list.Count; i++)
+                {
+                    if (!string.IsNullOrEmpty(list[i].MemberId) &&
+                        string.IsNullOrEmpty(list[i].MemberName) &&
+                        idNameMap.ContainsKey(list[i].MemberId))
+                    {
+                        list[i].MemberName = idNameMap[list[i].MemberId];
+                    }
+                }
+            }
+        }
+
+        return list;
     }
 
     private static ProjectRecord MapItemToProjectRecord(Item item)
@@ -2174,10 +2729,23 @@ public class ProjectAnalyticsController
             query.StateFilter = requestItem.getProperty("state", "Active");
             query.ProjectTypeFilter = requestItem.getProperty("project_type", "1.Standard,2.Professional");
             query.TerritoryFilter = requestItem.getProperty("territory", "ALL");
-            query.TeamId = requestItem.getProperty("team_id", "ALL");
+
+            string rawTeamProp = requestItem.getProperty("team_id", "");
+            if (!string.IsNullOrEmpty(rawTeamProp))
+            {
+                query.TeamId = rawTeamProp;
+                query.HasExplicitTeamId = true;
+            }
+            else
+            {
+                query.TeamId = "ALL";
+                query.HasExplicitTeamId = false;
+            }
+
             query.PmId = requestItem.getProperty("pm_id", "ALL");
             query.HealthFilter = requestItem.getProperty("health_status", "ALL");
             query.Keyword = requestItem.getProperty("keyword", "");
+            query.NaturalQuery = requestItem.getProperty("natural_query", "");
             query.ProjNum = ArasProjectRepository.ParseInt(requestItem.getProperty("proj_num", "0"), 0);
         }
 
@@ -2185,16 +2753,58 @@ public class ProjectAnalyticsController
     }
 
     /// <summary>
+    /// 依據當前登入使用者之 team_id.keyed_name 與 value_score 套用執行團隊篩選與權限限制
+    /// 規則：
+    /// 1. 若 user.team_id.keyed_name 為 TPS / SUS / SHS / ICS，預設篩選條件自動帶入該執行團隊。
+    /// 2. 若符合上述執行團隊，且 user.value_score 不等於 V9 且不等於 V10，強制限制僅能查詢自身執行團隊 (覆寫 TeamId = userCtx.TeamCode)。
+    /// </summary>
+    public UserContextDto ApplyUserTeamAccessPolicy(AnalyticsQueryDto query)
+    {
+        UserContextDto userCtx = this._repo != null ? this._repo.GetCurrentUserContext() : new UserContextDto();
+        if (userCtx == null)
+        {
+            userCtx = new UserContextDto();
+        }
+        if (query == null)
+        {
+            return userCtx;
+        }
+
+        if (userCtx.IsManagedExecTeam && !string.IsNullOrEmpty(userCtx.TeamCode))
+        {
+            if (userCtx.IsTeamRestricted)
+            {
+                // 非 V9/V10 之受管執行團隊成員：強制鎖定僅能查詢自身執行團隊
+                query.TeamId = userCtx.TeamCode;
+            }
+            else if (!query.HasExplicitTeamId)
+            {
+                // V9/V10 之受管執行團隊成員：當未顯式指定 team_id 時，預設帶入自身執行團隊
+                query.TeamId = userCtx.TeamCode;
+            }
+        }
+        return userCtx;
+    }
+
+    /// <summary>
     /// 依據 AnalyticsQueryDto 執行 RESTful 路由分發並回傳 JSON 字串
     /// </summary>
     public string ExecuteRoute(AnalyticsQueryDto query, System.DateTime asOfDate)
     {
+        if (query == null) query = new AnalyticsQueryDto();
         string route = (query.Route ?? "/api/v1/dashboard/summary").Trim();
 
         if (route.Equals("/api/v1/health", System.StringComparison.OrdinalIgnoreCase) ||
             route.Equals("HEALTH_CHECK", System.StringComparison.OrdinalIgnoreCase))
         {
-            return "{\"status\":\"healthy\",\"version\":\"1.0.0\",\"system\":\"PMO_ProjectAnalytics_API\"}";
+            return "{\"status\":\"healthy\",\"version\":\"1.1.0\",\"system\":\"PMO_ProjectAnalytics_API\"}";
+        }
+
+        if (route.StartsWith("/api/v1/dashboard/user-context", System.StringComparison.OrdinalIgnoreCase) ||
+            route.Equals("GET_USER_CONTEXT", System.StringComparison.OrdinalIgnoreCase))
+        {
+            UserContextDto uCtx = this._repo != null ? this._repo.GetCurrentUserContext() : new UserContextDto();
+            return "{\"status\":\"success\",\"user_context\":" + SerializeUserContext(uCtx) + "}";
         }
 
         if (route.StartsWith("/api/v1/dashboard/team-summary", System.StringComparison.OrdinalIgnoreCase) ||
@@ -2238,13 +2848,14 @@ public class ProjectAnalyticsController
     }
 
     /// <summary>
-    /// 路由 0：GET /api/v1/dashboard/team-summary — 首頁極速統計各執行團隊 (TPS, ICS, PMO, SUS, SHS, Other) Active 專案數
+    /// 路由 0：GET /api/v1/dashboard/team-summary — 首頁極速統計各執行團隊 (TPS, ICS, PMO, SUS, SHS, Other) 專案數
     /// 效能保證：僅檢索 Project 主檔，完全不讀取 WBS 與 Activity2
     /// </summary>
     public string GetTeamSummaryJson(AnalyticsQueryDto query, System.DateTime asOfDate)
     {
         if (query == null) query = new AnalyticsQueryDto();
         if (string.IsNullOrEmpty(query.StateFilter)) query.StateFilter = "Active";
+        UserContextDto userCtx = ApplyUserTeamAccessPolicy(query);
 
         System.Collections.Generic.List<ProjectRecord> projects = this._repo.GetProjects(query);
 
@@ -2277,12 +2888,14 @@ public class ProjectAnalyticsController
             }
         }
 
-        // 組裝高速回應 JSON (支援動態狀態篩選)
+        // 組裝高速回應 JSON (支援動態狀態篩選與使用者團隊權限資訊)
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         sb.Append("{");
         sb.Append("\"status\":\"success\",");
         sb.Append("\"route\":\"/api/v1/dashboard/team-summary\",");
         sb.Append("\"as_of_date\":\"").Append(asOfDate.ToString("yyyy-MM-dd")).Append("\",");
+        sb.Append("\"user_context\":").Append(SerializeUserContext(userCtx)).Append(",");
+        sb.Append("\"effective_team_filter\":\"").Append(EscapeJson(query.TeamId ?? "ALL")).Append("\",");
         sb.Append("\"total_projects\":").Append(totalProjects).Append(",");
         sb.Append("\"total_active_projects\":").Append(totalProjects).Append(",");
         sb.Append("\"teams\":[");
@@ -2314,6 +2927,8 @@ public class ProjectAnalyticsController
     /// </summary>
     public string GetPortfolioSummaryJson(AnalyticsQueryDto query, System.DateTime asOfDate)
     {
+        if (query == null) query = new AnalyticsQueryDto();
+        UserContextDto userCtx = ApplyUserTeamAccessPolicy(query);
         System.Collections.Generic.List<ProjectRecord> projects = this._repo.GetProjects(query);
         System.Collections.Generic.List<int> projNums = new System.Collections.Generic.List<int>();
         System.Collections.Generic.List<string> rootWbsIds = new System.Collections.Generic.List<string>();
@@ -2426,6 +3041,8 @@ public class ProjectAnalyticsController
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         sb.Append("{");
         sb.Append("\"status\":\"success\",");
+        sb.Append("\"user_context\":").Append(SerializeUserContext(userCtx)).Append(",");
+        sb.Append("\"effective_team_filter\":\"").Append(EscapeJson(query.TeamId ?? "ALL")).Append("\",");
         sb.Append("\"summary\":{");
         sb.Append("\"total_projects\":").Append(totalProj).Append(",");
         sb.Append("\"active_projects\":").Append(activeCount).Append(",");
@@ -2487,6 +3104,8 @@ public class ProjectAnalyticsController
 
         System.Collections.Generic.List<WbsRecord> allWbs = this._repo.GetWbsHierarchy(nums, wbsIds);
         System.Collections.Generic.List<ActivityRecord> acts = this._repo.GetActivitiesWithAssignments(nums);
+        System.Collections.Generic.List<ProjectRecord> singleProjList = new System.Collections.Generic.List<ProjectRecord> { proj };
+        System.Collections.Generic.List<WorkTimeRecordEntry> wtRecords = this._repo.GetWorkTimeRecords(singleProjList);
 
         WbsRecord rootWbs = null;
         for (int i = 0; i < allWbs.Count; i++)
@@ -2502,7 +3121,7 @@ public class ProjectAnalyticsController
         System.Collections.Generic.List<WbsStageAnalyticsDto> mainStages =
             this._stageAnalyzer.AnalyzeMainStages(proj.WbsId, allWbs, acts, asOfDate);
         System.Collections.Generic.List<AssigneeWorkloadDto> assignees =
-            this._workloadAggregator.AggregateByAssignee(acts, asOfDate);
+            this._workloadAggregator.AggregateByAssigneeWithWorkTime(singleProjList, acts, wtRecords, asOfDate);
 
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         sb.Append("{");
@@ -2564,30 +3183,108 @@ public class ProjectAnalyticsController
     }
 
     /// <summary>
-    /// 路由 4：GET /api/v1/dashboard/assignees — 跨專案或單一專案成員任務負荷統計
+    /// 路由 4：GET /api/v1/dashboard/assignees — 跨專案或單一專案成員任務負荷與工時回報統計
     /// </summary>
     public string GetAssigneeWorkloadJson(AnalyticsQueryDto query, System.DateTime asOfDate)
     {
+        if (query == null) query = new AnalyticsQueryDto();
+        UserContextDto userCtx = ApplyUserTeamAccessPolicy(query);
+
+        System.Collections.Generic.List<ProjectRecord> projs = new System.Collections.Generic.List<ProjectRecord>();
         System.Collections.Generic.List<int> projNums = new System.Collections.Generic.List<int>();
-        if (query != null && query.ProjNum > 0)
+
+        if (query.ProjNum > 0)
         {
-            projNums.Add(query.ProjNum);
+            ProjectRecord singleProj = this._repo.GetProjectByNumber(query.ProjNum);
+            if (singleProj != null)
+            {
+                projs.Add(singleProj);
+                projNums.Add(singleProj.ProjNum);
+            }
+            else
+            {
+                projNums.Add(query.ProjNum);
+            }
         }
         else
         {
-            System.Collections.Generic.List<ProjectRecord> projs = this._repo.GetProjects(query);
-            for (int i = 0; i < projs.Count; i++)
+            System.Collections.Generic.List<ProjectRecord> rawProjs = this._repo.GetProjects(query);
+            // 若有設定健康度燈號篩選，先計算專案健康度並過濾出符合條件的專案
+            if (!string.IsNullOrEmpty(query.HealthFilter) &&
+                !string.Equals(query.HealthFilter, "ALL", System.StringComparison.OrdinalIgnoreCase) &&
+                rawProjs.Count > 0)
             {
-                if (projs[i].ProjNum > 0) projNums.Add(projs[i].ProjNum);
+                System.Collections.Generic.List<int> tempNums = new System.Collections.Generic.List<int>();
+                System.Collections.Generic.List<string> tempWbsIds = new System.Collections.Generic.List<string>();
+                for (int i = 0; i < rawProjs.Count; i++)
+                {
+                    if (rawProjs[i].ProjNum > 0) tempNums.Add(rawProjs[i].ProjNum);
+                    if (!string.IsNullOrEmpty(rawProjs[i].WbsId)) tempWbsIds.Add(rawProjs[i].WbsId);
+                }
+                System.Collections.Generic.List<WbsRecord> allWbs = this._repo.GetWbsHierarchy(tempNums, tempWbsIds);
+                System.Collections.Generic.List<ActivityRecord> allActs = this._repo.GetActivitiesWithAssignments(tempNums);
+                System.Collections.Generic.Dictionary<int, WbsRecord> rootWbsByProj = new System.Collections.Generic.Dictionary<int, WbsRecord>();
+                for (int i = 0; i < allWbs.Count; i++)
+                {
+                    if (allWbs[i].IsTop && !rootWbsByProj.ContainsKey(allWbs[i].ProjNum))
+                    {
+                        rootWbsByProj[allWbs[i].ProjNum] = allWbs[i];
+                    }
+                }
+                System.Collections.Generic.Dictionary<int, System.Collections.Generic.List<ActivityRecord>> actsByProj =
+                    new System.Collections.Generic.Dictionary<int, System.Collections.Generic.List<ActivityRecord>>();
+                for (int i = 0; i < allActs.Count; i++)
+                {
+                    int pn = allActs[i].ProjNum;
+                    if (!actsByProj.ContainsKey(pn)) actsByProj[pn] = new System.Collections.Generic.List<ActivityRecord>();
+                    actsByProj[pn].Add(allActs[i]);
+                }
+                for (int i = 0; i < rawProjs.Count; i++)
+                {
+                    ProjectRecord rp = rawProjs[i];
+                    WbsRecord rw = rootWbsByProj.ContainsKey(rp.ProjNum) ? rootWbsByProj[rp.ProjNum] : null;
+                    System.Collections.Generic.List<ActivityRecord> pa = actsByProj.ContainsKey(rp.ProjNum)
+                        ? actsByProj[rp.ProjNum]
+                        : new System.Collections.Generic.List<ActivityRecord>();
+                    ProjectSummaryDto sDto = this._healthCalc.ComputeProjectSummary(rp, rw, pa, asOfDate);
+                    if (string.Equals(sDto.HealthStatus, query.HealthFilter, System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        projs.Add(rp);
+                        if (rp.ProjNum > 0) projNums.Add(rp.ProjNum);
+                    }
+                }
+            }
+            else
+            {
+                projs = rawProjs;
+                for (int i = 0; i < projs.Count; i++)
+                {
+                    if (projs[i].ProjNum > 0) projNums.Add(projs[i].ProjNum);
+                }
             }
         }
 
         System.Collections.Generic.List<ActivityRecord> acts = this._repo.GetActivitiesWithAssignments(projNums);
+        System.Collections.Generic.List<WorkTimeRecordEntry> wtRecords = this._repo.GetWorkTimeRecords(projs);
         System.Collections.Generic.List<AssigneeWorkloadDto> assignees =
-            this._workloadAggregator.AggregateByAssignee(acts, asOfDate);
+            this._workloadAggregator.AggregateByAssigneeWithWorkTime(projs, acts, wtRecords, asOfDate);
+
+        double totalReportedHours = 0.0;
+        for (int i = 0; i < assignees.Count; i++)
+        {
+            totalReportedHours += assignees[i].ReportedWorkHours;
+        }
+        double totalReportedDays = System.Math.Round(totalReportedHours / 8.0, 2);
+        totalReportedHours = System.Math.Round(totalReportedHours, 1);
 
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
-        sb.Append("{\"status\":\"success\",\"assignees\":[");
+        sb.Append("{");
+        sb.Append("\"status\":\"success\",");
+        sb.Append("\"user_context\":").Append(SerializeUserContext(userCtx)).Append(",");
+        sb.Append("\"effective_team_filter\":\"").Append(EscapeJson(query.TeamId ?? "ALL")).Append("\",");
+        sb.Append("\"total_reported_hours\":").Append(FormatNum(totalReportedHours)).Append(",");
+        sb.Append("\"total_reported_days\":").Append(FormatNum(totalReportedDays)).Append(",");
+        sb.Append("\"assignees\":[");
         for (int i = 0; i < assignees.Count; i++)
         {
             if (i > 0) sb.Append(",");
@@ -2804,6 +3501,26 @@ public class ProjectAnalyticsController
         return sb.ToString();
     }
 
+    private static string SerializeUserContext(UserContextDto u)
+    {
+        if (u == null) u = new UserContextDto();
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        sb.Append("{");
+        sb.Append("\"user_id\":\"").Append(EscapeJson(u.UserId)).Append("\",");
+        sb.Append("\"login_name\":\"").Append(EscapeJson(u.LoginName)).Append("\",");
+        sb.Append("\"user_name\":\"").Append(EscapeJson(u.UserName)).Append("\",");
+        sb.Append("\"team_id\":\"").Append(EscapeJson(u.TeamId)).Append("\",");
+        sb.Append("\"raw_team_keyed_name\":\"").Append(EscapeJson(u.RawTeamKeyedName)).Append("\",");
+        sb.Append("\"team_code\":\"").Append(EscapeJson(u.TeamCode)).Append("\",");
+        sb.Append("\"value_score\":\"").Append(EscapeJson(u.ValueScore)).Append("\",");
+        sb.Append("\"is_managed_exec_team\":").Append(u.IsManagedExecTeam ? "true" : "false").Append(",");
+        sb.Append("\"is_high_privilege_score\":").Append(u.IsHighPrivilegeScore ? "true" : "false").Append(",");
+        sb.Append("\"is_team_restricted\":").Append(u.IsTeamRestricted ? "true" : "false").Append(",");
+        sb.Append("\"default_team_filter\":\"").Append(EscapeJson(u.DefaultTeamFilter)).Append("\"");
+        sb.Append("}");
+        return sb.ToString();
+    }
+
     private static string SerializeAssignee(AssigneeWorkloadDto a)
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
@@ -2821,8 +3538,28 @@ public class ProjectAnalyticsController
         sb.Append("\"total_est_hours\":").Append(FormatNum(a.TotalEstHours)).Append(",");
         sb.Append("\"total_actual_hours\":").Append(FormatNum(a.TotalActualHours)).Append(",");
         sb.Append("\"remaining_est_hours\":").Append(FormatNum(a.RemainingEstHours)).Append(",");
+        sb.Append("\"reported_work_hours\":").Append(FormatNum(a.ReportedWorkHours)).Append(",");
+        sb.Append("\"reported_work_days\":").Append(FormatNum(a.ReportedWorkDays)).Append(",");
         sb.Append("\"load_level\":\"").Append(EscapeJson(a.LoadLevel)).Append("\",");
-        sb.Append("\"project_count\":").Append(a.ProjectCount);
+        sb.Append("\"project_count\":").Append(a.ProjectCount).Append(",");
+        sb.Append("\"project_worktime_breakdowns\":[");
+        if (a.ProjectWorkTimeBreakdowns != null)
+        {
+            for (int i = 0; i < a.ProjectWorkTimeBreakdowns.Count; i++)
+            {
+                if (i > 0) sb.Append(",");
+                ProjectWorkTimeBreakdownDto b = a.ProjectWorkTimeBreakdowns[i];
+                sb.Append("{");
+                sb.Append("\"project_id\":\"").Append(EscapeJson(b.ProjectId)).Append("\",");
+                sb.Append("\"proj_num\":").Append(b.ProjNum).Append(",");
+                sb.Append("\"project_name\":\"").Append(EscapeJson(b.ProjectName)).Append("\",");
+                sb.Append("\"reported_hours\":").Append(FormatNum(b.ReportedHours)).Append(",");
+                sb.Append("\"reported_days\":").Append(FormatNum(b.ReportedDays)).Append(",");
+                sb.Append("\"record_count\":").Append(b.RecordCount);
+                sb.Append("}");
+            }
+        }
+        sb.Append("]");
         sb.Append("}");
         return sb.ToString();
     }

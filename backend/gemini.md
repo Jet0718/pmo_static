@@ -56,8 +56,23 @@
 - Aras IOM 查詢 Project 時，若 `getPropertyAttribute("team_id", "keyed_name")` 未回傳或回傳空，後端必須透過 Team 快取字典（包含預載之 BDM Team GUID 映射表與 `Team` ItemType 查詢）反查真實團隊代碼，避免所有專案誤入 Other。
 - `NormalizeTeamCode(teamName, teamId)` 必須兼容雙參數無序傳入，同時比對兩者與 GUID 字典。
 
-## 5. Activity2 任務指派人、里程碑扣除與 WBS 排序規範
+## 5. Activity2 任務指派人、里程碑扣除、工時回報聚合與 WBS 排序規範
 - **指派人取得 (`Activity2.managed_by_id` 優先)**：`GetActivitiesWithAssignments` 中，首要讀取 `managed_by_id`（及其 `keyed_name` 屬性或 `Identity` 反查）作為 `AssigneeId` / `AssigneeName`；僅當 `managed_by_id` 為空時，才參考 `Activity2 Assignment` 或回退至 `owned_by_id`，嚴禁覆蓋已存在之 `managed_by_id`。
+- **任務實報工時提取**：`Activity2.actual_work` 於 BDM 常為空值，實際滾算工時存於 `Activity2.rollup_actual_work`，因此讀取 `ActualWork` 時必須優先取 `rollup_actual_work`（若 `> 0`），否則才取 `actual_work`。
 - **扣除里程碑任務 (`is_milestone == '1'`)**：`WorkloadAggregator.AggregateByAssignee` 統計成員負荷時，必須將 `act.IsMilestone == true` 的里程碑任務扣除忽略不計。
+- **專案成員工時回報統計 (`workingtime_record`)**：
+  - 針對當前篩選條件下之專案 ID 集合 (`project IN (...)`)，查詢 `workingtime_record` ItemType（提取 `project`、`cn_act2`、`work_hour`、`work_date`、`owned_by_id`、`created_by_id`）。
+  - 依回報成員 (`owned_by_id`，若空則取 `created_by_id` 或反查母表 `WorkingTime.owned_by_id`) 聚合計算每位成員在當前篩選專案下的「工時回報總值 (`ReportedWorkHours`)」、「換算總工天 (`ReportedWorkDays = ReportedWorkHours / 8.0`)」以及「各專案工時回報明細清單 (`ProjectWorkTimeBreakdownDto`：含專案 ID、專案編號、專案名稱、回報工時、回報工天、回報筆數)」。
+  - 將成員工時回報統計同步整合至 `AssigneeWorkloadDto` 與獨立之工時回報排行榜清單，供前端「專案成員工時回報統計」與「任務負荷統計表之工時回報下鑽連結」使用。
 - **PM 績效排序**：`BuildGroupPerformanceJson` 依專案數量 (`project_count`) 降冪排序。
 - **WBS 階段排序**：`AnalyzeMainStages` 回傳之主階段清單必須依據 `StageName` 進行自然升冪排序。
+
+## 6. 當前登入使用者預讀與執行團隊權限控管 (`UserContextDto`)
+- **預讀欄位**：後端透過 `this._inn.getUserID()` 查詢 `User` ItemType 的 `id,login_name,keyed_name,team_id,value_score`（並解析 `team_id/@keyed_name` 或透過 `NormalizeTeamCode` 反查團隊代碼）。
+- **受管執行團隊自動帶入**：若 `user.team_id.keyed_name` 為 `TPS`、`SUS`、`SHS` 或 `ICS` 四大執行團隊之一：
+  - 預設查詢自動將 `TeamId` 設定為該使用者所屬之執行團隊。
+- **跨團隊查詢限制 (`value_score` 判斷)**：
+  - 若該使用者屬於 `TPS`、`SUS`、`SHS` 或 `ICS`，且其 `user.value_score` **不等於 `V9` 且不等於 `V10`**（忽略大小寫）：
+    - 設定 `IsTeamRestricted = true`，後端在所有查詢端點 (`team-summary`、`summary`、`assignees` 等) 強制覆寫 `query.TeamId = userContext.TeamCode`，嚴格禁止查詢其他執行團隊資料。
+  - 若 `user.value_score` 為 `V9` 或 `V10`（或使用者不屬於 `TPS/SUS/SHS/ICS`，如 `PMO`），則 `IsTeamRestricted = false`，允許透過自然語言篩選或點擊長條圖查詢全部或其他執行團隊。
+- **使用者上下文端點與回傳**：提供 `GET /api/v1/dashboard/user-context`（並在 `team-summary` 與 `summary` 一併附帶 `user_context` JSON 節點），讓前端可即時呈現當前使用者身份、所屬團隊、職等 (`value_score`) 與權限鎖定狀態。

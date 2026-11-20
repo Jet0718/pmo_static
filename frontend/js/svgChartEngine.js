@@ -172,8 +172,9 @@
         '<div style="padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">' +
             '<span style="font-weight:700;color:#0f172a;">' + escapeHtml(a.assignee_name) + '</span>' +
-            '<div style="display:flex;gap:10px;align-items:center;font-size:12px;">' +
+            '<div style="display:flex;gap:10px;align-items:center;font-size:12px;flex-wrap:wrap;">' +
               '<span>總任務: <strong>' + a.total_tasks + '</strong> (完成 ' + a.completed_tasks + ' / 進行中 ' + a.in_progress_tasks + ' / 逾期 <strong style="color:#ef4444;">' + a.overdue_tasks + '</strong>)</span>' +
+              '<span>回報工時: <a href="javascript:void(0);" class="pmo-worktime-link js-drill-member-worktime" data-assignee-id="' + escapeHtml(a.assignee_id || a.assignee_name) + '" title="點擊查看 ' + escapeHtml(a.assignee_name) + ' 在各專案的工時回報總工時/工天明細"><strong>' + Number(a.reported_work_hours !== undefined ? a.reported_work_hours : (a.total_actual_hours || 0)).toFixed(1) + ' hr</strong> (' + Number(a.reported_work_days !== undefined ? a.reported_work_days : (Number(a.total_actual_hours || 0) / 8.0)).toFixed(2) + ' 工天)</a></span>' +
               '<span style="padding:2px 8px;border-radius:999px;font-weight:700;background:' + loadBadgeBg + ';color:' + loadBadgeFg + ';">負荷: ' + escapeHtml(a.load_level) + ' (' + a.remaining_est_hours + ' hr 剩餘)</span>' +
             '</div>' +
           '</div>' +
@@ -182,6 +183,54 @@
             '<div title="進行中: ' + inProgNormal + '" style="width:' + inProgPct + '%;background:#3b82f6;"></div>' +
             '<div title="已逾期: ' + a.overdue_tasks + '" style="width:' + ovdPct + '%;background:#ef4444;"></div>' +
             '<div title="未開始: ' + a.not_started_tasks + '" style="width:' + pendingPct + '%;background:#cbd5e1;"></div>' +
+          '</div>' +
+        '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  // 渲染專案成員工時回報統計橫條圖 (需求 3：對當前篩選條件下，各成員回報任務的工時統計總值排行)
+  function renderMemberWorkTimeReportChart(assignees = []) {
+    if (!assignees || assignees.length === 0) {
+      return '<div style="padding:24px;text-align:center;color:#64748b;">當前篩選條件下尚無成員工時回報資料</div>';
+    }
+    var sortedByWork = assignees.slice().sort(function (a, b) {
+      var ha = Number(a.reported_work_hours !== undefined ? a.reported_work_hours : (a.total_actual_hours || 0));
+      var hb = Number(b.reported_work_hours !== undefined ? b.reported_work_hours : (b.total_actual_hours || 0));
+      return hb - ha;
+    });
+
+    var maxHours = 1;
+    sortedByWork.forEach(function (a) {
+      var h = Number(a.reported_work_hours !== undefined ? a.reported_work_hours : (a.total_actual_hours || 0));
+      if (h > maxHours) maxHours = h;
+    });
+
+    var html = '<div style="display:flex;flex-direction:column;gap:10px;">';
+    sortedByWork.forEach(function (a) {
+      var hrs = Number(a.reported_work_hours !== undefined ? a.reported_work_hours : (a.total_actual_hours || 0));
+      var days = Number(a.reported_work_days !== undefined ? a.reported_work_days : (hrs / 8.0));
+      var estHrs = Number(a.total_est_hours || 0);
+      var widthPct = maxHours > 0 ? Math.min(100, Math.max(2, Number(((hrs / maxHours) * 100).toFixed(1)))) : 0;
+      var memberKey = a.assignee_id || a.assignee_name;
+
+      html +=
+        '<div style="padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<span style="font-weight:700;color:#0f172a;">' + escapeHtml(a.assignee_name) + '</span>' +
+              '<span style="font-size:12px;color:#64748b;">(參與 ' + Number(a.project_count || 0) + ' 專案 / ' + Number(a.total_tasks || 0) + ' 項任務)</span>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:12px;font-size:13px;">' +
+              '<span style="color:#64748b;font-size:12px;">預估: ' + estHrs.toFixed(1) + ' hr</span>' +
+              '<a href="javascript:void(0);" class="pmo-worktime-link js-drill-member-worktime" data-assignee-id="' + escapeHtml(memberKey) + '" title="點擊深入檢視 ' + escapeHtml(a.assignee_name) + ' 在各專案的工時回報總工時与工天明細">' +
+                '回報總計: <strong>' + hrs.toFixed(1) + ' hr</strong> (' + days.toFixed(2) + ' 工天) &#128269;' +
+              '</a>' +
+            '</div>' +
+          '</div>' +
+          '<div class="progress-track" style="height:10px;background:#e2e8f0;">' +
+            '<div class="progress-fill" style="width:' + widthPct + '%;background:linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%);"></div>' +
           '</div>' +
         '</div>';
     });
@@ -261,7 +310,8 @@
     renderTeamActiveProjectsBarChart: renderTeamActiveProjectsBarChart,
     renderGroupComparisonHtml: renderGroupComparisonHtml,
     renderWbsStageDeviationChart: renderWbsStageDeviationChart,
-    renderAssigneeStackedChart: renderAssigneeStackedChart
+    renderAssigneeStackedChart: renderAssigneeStackedChart,
+    renderMemberWorkTimeReportChart: renderMemberWorkTimeReportChart
   };
 
   if (typeof module !== "undefined" && module.exports) {

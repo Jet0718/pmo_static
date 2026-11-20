@@ -2,19 +2,23 @@
 
 ## 1. 領域職責
 負責在 Aras Innovator 12 SP9 的 TOC View (Table of Contents) 中呈現「PMO 專案進度狀態分析統計儀表板 (Dashboard)」，並對齊 `C:\TEST\pmomonthly` 的視覺化風格與資料結構，提供：
-1. **全域多專案總覽 (`/api/v1/dashboard/summary` & `/api/v1/dashboard/team-summary`)**：
-   - **首頁極速概覽與篩選聯動**：載入時先呼叫 `/api/v1/dashboard/team-summary`，動態展示「各執行團隊專案數量長條統計圖」，長條圖統計結果即時聯動篩選條件（非寫死為 Active），標題與計數徽章動態依目前狀態更新。
-   - **統計圖色塊互動展開**：長條圖色塊具備點擊互動，使用者點擊特定團隊色塊（如 TPS, ICS, PMO, SUS, SHS, Other）時，漸進向下展開該團隊詳細分析與多專案明細列表。
-   - **多維度篩選器規格**：
-     - 專案狀態 (`state`)：預設為 `Active`，支援 `ALL`、`closed`、`pending`。
-     - 專案類型 (`cn_project_type`)：採用下拉複選元件提供 9 大類型 (`1.Standard`, `2.Professional`, `3.Upgrade`, `4.Customize`, `5.Product`, `6.Technical`, `7.Marketing`, `8.EmployeeTraining`, `F.Misc`)，預設選中 `1.Standard` 與 `2.Professional`。
-     - 執行團隊 (`team_id`)：選單更新為 `ALL`、`TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`。
-   - **多專案進度明細列表**：取消獨立「下鑽操作」欄位，將該欄之「階段與成員分析」下鑽連結直接整併至第一欄「專案編號」，點擊專案編號即可切換至該專案下鑽視圖。
-2. **單一專案下鑽分析 (`/api/v1/dashboard/project/{proj_num}` & `/api/v1/dashboard/wbs/{proj_num}`)**:
-   - **Ph 1 ~ Ph 12 階段進度與色碼狀態橫向時間軸**（直接呈現 `Project` 上的 `percent_compl_1~12` 與 `status_1~12`）。
-   - **WBS 各階段 (Stage / Milestone) 進度達成率與時程偏差分析圖表**（排程起訖日、實際完成率、應有進度、SV 時程變異與偏差天數）。
-3. **專案成員任務負荷分析 (`/api/v1/dashboard/assignees`)**:
-   - 呈現專案內（或跨專案）每位成員 (`Assignee` / `owned_by_id`) 的任務負荷堆疊橫條圖與明細表（總任務數、已完成、進行中、未開始、已逾期、預估工時 `work_est`、實際工時 `actual_work`、個人完成率 %）。
+1. **自然語言輸入的 NoUI 智慧篩選區塊 (`NaturalLanguageQueryParser`)**：
+   - 移除傳統多欄位下拉選單，全面改為**單一自然語言輸入框 (NoUI Search Bar)** 搭配**常用條件提示標籤 (Prompt Chips)** 與**當前生效條件膠囊 (Active Filter Pills)**。
+   - **預設篩選條件**：保留 `project_type = 1.Standard, 2.Professional` 且 `state = Active` 不變。
+   - **自然語言解析規則**：可自動從使用者輸入的自然語言句子中識別專案狀態（進行中/已結案/暫停/全部狀態）、9 大專案類型（Standard/Professional/Upgrade/Customize/Product/Technical/Marketing/Training/Misc 或全部類型）、執行團隊（TPS/ICS/PMO/SUS/SHS/Other）、服務中心（台北/新竹/台中/台南）、健康度燈號（綠燈/黃燈/紅燈）以及專案編號/名稱/客戶/PM 關鍵字。
+2. **當前使用者 (`user.team_id.keyed_name` 與 `user.value_score`) 預讀與執行團隊權限限制**：
+   - 啟動時自動預讀當前登入使用者資訊 (`user_context`)。
+   - 若 `user.team_id.keyed_name` 為 `TPS`、`SUS`、`SHS` 或 `ICS`，預設篩選條件自動帶入該執行團隊 (`team_id`)。
+   - 若該使用者屬於上述四個執行團隊，且 `user.value_score` 不等於 `V9` 且不等於 `V10`，則前端與後端同步**限制查詢其他執行團隊**（鎖定團隊條件、在 UI 顯示權限鎖定提示徽章，且點擊其他團隊提示或長條圖時阻擋跨團隊切換）。
+3. **全域多專案總覽與左側 Aras Item Icon 開啟專案畫面 (`/api/v1/dashboard/summary` & `/api/v1/dashboard/team-summary`)**：
+   - 首頁載入時先呼叫 `/api/v1/dashboard/team-summary`，動態展示「各執行團隊專案數量長條統計圖」，點擊受權限允許之團隊色塊可向下展開詳細分析與多專案明細列表。
+   - **專案清單左側 Item Icon**：在專案清單第一欄專案編號的**左側增加一個 Item Icon 按鈕 (`.js-open-aras-item`)**，點擊時呼叫 `top.aras.uiShowItem("Project", projectId)` 直接於 Aras Innovator 系統中開啟該專案 Item 畫面；點擊右側專案編號文字則維持下鑽至第 2 頁籤（階段達成率與成員分析）。
+4. **單一專案下鑽分析 (`/api/v1/dashboard/project/{proj_num}` & `/api/v1/dashboard/wbs/{proj_num}`)**:
+   - **Ph 1 ~ Ph 12 階段進度與色碼狀態橫向時間軸**。
+   - **WBS 各階段 (Stage / Milestone) 進度達成率與時程偏差分析圖表**（依名稱自然升冪排序）。
+5. **專案成員任務負荷統計與工時回報統計 (`/api/v1/dashboard/assignees`)**:
+   - **專案成員工時回報統計**：針對當前篩選條件下，統計各成員回報任務的工時統計總值 (`reported_work_hours` / `reported_work_days`) 與視覺化排行圖表。
+   - **成員任務負荷統計表整合工時回報下鑽連結**：在專案成員任務負荷統計表中增加「使用者工時回報總值」欄位並附上超連結 (`.js-drill-member-worktime`)，點擊後開啟防裁切浮層 Modal，深入檢視該員在當前篩選條件下**各專案的工時回報總工時 (`hr`) 與總工天 (`工時 / 8`) 明細表**（並支援點擊專案左側 Item Icon 開啟 Aras 專案畫面）。
 
 ## 2. Aras Client / JavaScript 嚴格規範
 1. **零隱式型別與 Linter 防護**：

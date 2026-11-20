@@ -260,3 +260,121 @@ test("8. 各執行團隊與專案經理績效對比：展開團隊時應依不�
   assert.ok(html.includes("羅仁 Jet") && html.includes("(7 專案)"), "績效對比卡片應包含羅仁 Jet (7 專案)");
   assert.ok(!html.includes("(18 專案)"), "績效對比卡片不應只顯示單一團隊 TPS (18 專案)，而應依不同 PM 統計");
 });
+
+test("9. [需求 1] 自然語言 NoUI 篩選解析器應保留預設 Standard/Professional 並正確解析複合自然語言條件", () => {
+  // 空輸入時應保留預設 state=Active 且 project_type=1.Standard,2.Professional
+  const defaultParsed = PMOApi.parseNaturalLanguageQuery("", null);
+  assert.equal(defaultParsed.state, "Active");
+  assert.equal(defaultParsed.project_type, "1.Standard,2.Professional");
+  assert.equal(defaultParsed.team_id, "ALL");
+
+  // 輸入「進行中 TPS 紅燈專案」
+  const parsedTpsRed = PMOApi.parseNaturalLanguageQuery("查詢 進行中 TPS 紅燈專案", null);
+  assert.equal(parsedTpsRed.state, "Active");
+  assert.equal(parsedTpsRed.project_type, "1.Standard,2.Professional", "未提及專案類型時應維持預設 Standard/Professional");
+  assert.equal(parsedTpsRed.team_id, "TPS");
+  assert.equal(parsedTpsRed.health_status, "RED");
+  assert.equal(parsedTpsRed.keyword, "");
+
+  // 輸入「新竹服務中心 customize 或 upgrade 黃燈 陳建宏」
+  const parsedCustom = PMOApi.parseNaturalLanguageQuery("新竹服務中心 customize 或 upgrade 黃燈 陳建宏", null);
+  assert.equal(parsedCustom.territory, "新竹服務中心");
+  assert.equal(parsedCustom.project_type, "3.Upgrade,4.Customize");
+  assert.equal(parsedCustom.health_status, "YELLOW");
+  assert.equal(parsedCustom.keyword, "陳建宏");
+});
+
+test("10. [需求 2] 預讀當前使用者 (user.team_id.keyed_name 與 user.value_score) 預設帶入團隊並限制非 V9/V10 跨團隊查詢", async () => {
+  // 情境 A：TPS 團隊成員且 value_score = V8 (非 V9/V10) -> 預設篩選增加 TPS 且限制查詢其他執行團隊
+  const clientTpsV8 = new PMOApi.ArasApiClient({
+    mockUserContext: {
+      user_id: "U_TPS_V8",
+      login_name: "allen.chang",
+      user_name: "張國倫 Allen.chang",
+      team_id: "604F804DDA84451CA3B6CB54CD905BC9",
+      raw_team_keyed_name: "TPS",
+      value_score: "V8"
+    }
+  });
+  const storeTpsV8 = new PMOStore.DashboardStateStore(clientTpsV8);
+  await storeTpsV8.refreshActiveView();
+
+  assert.equal(storeTpsV8.userContext.team_code, "TPS");
+  assert.equal(storeTpsV8.userContext.value_score, "V8");
+  assert.equal(storeTpsV8.userContext.is_team_restricted, true);
+  assert.equal(storeTpsV8.filters.team_id, "TPS", "TPS 使用者預設篩選條件應自動帶入 TPS");
+
+  // 當 TPS (V8) 使用者嘗試用自然語言查詢 ICS 團隊時，應被強制限制回 TPS 並產生權限提示
+  await storeTpsV8.applyNaturalLanguageQuery("查詢 ICS 進行中專案");
+  assert.equal(storeTpsV8.filters.team_id, "TPS", "非 V9/V10 之 TPS 使用者查詢 ICS 時應被強制鎖定為 TPS");
+  assert.ok(storeTpsV8.restrictionNotice.includes("限制僅查詢 TPS"), "應顯示跨團隊限制提示訊息");
+
+  // 當 TPS (V8) 使用者點擊長條圖上的 ICS 色塊時，也應被限制在 TPS
+  await storeTpsV8.expandTeamDetail("ICS");
+  assert.equal(storeTpsV8.selectedTeamForDrill, "TPS");
+  assert.equal(storeTpsV8.summaryData.projects.length, 1);
+  assert.equal(storeTpsV8.summaryData.projects[0].team_id, "TPS");
+
+  // 情境 B：TPS 團隊成員但 value_score = V9 -> 預設篩選為 TPS，但允許跨團隊查詢 ICS
+  const clientTpsV9 = new PMOApi.ArasApiClient({
+    mockUserContext: {
+      user_id: "U_TPS_V9",
+      login_name: "tps.director",
+      user_name: "TPS處長",
+      team_id: "604F804DDA84451CA3B6CB54CD905BC9",
+      raw_team_keyed_name: "TPS",
+      value_score: "V9"
+    }
+  });
+  const storeTpsV9 = new PMOStore.DashboardStateStore(clientTpsV9);
+  await storeTpsV9.refreshActiveView();
+  assert.equal(storeTpsV9.userContext.is_team_restricted, false);
+  assert.equal(storeTpsV9.filters.team_id, "TPS", "TPS (V9) 預設仍帶入 TPS 團隊");
+
+  await storeTpsV9.applyNaturalLanguageQuery("查詢 ICS 進行中專案");
+  assert.equal(storeTpsV9.filters.team_id, "ICS", "V9 使用者應允許跨團隊切換查詢 ICS");
+});
+
+test("11. [需求 3 & 需求 4] 專案成員工時回報統計、各專案總工時/工天明細下鑽連結與左側 Aras Item Icon 開啟專案畫面", async () => {
+  let openedItemType = "";
+  let openedItemId = "";
+  const fakeArasForUi = {
+    uiShowItem: function (typeName, itemId) {
+      openedItemType = typeName;
+      openedItemId = itemId;
+    }
+  };
+
+  const client = new PMOApi.ArasApiClient();
+  const store = new PMOStore.DashboardStateStore(client);
+  await store.expandTeamDetail("ALL");
+
+  // 驗證需求 4：專案清單左側包含 Aras Project Item Icon 按鈕，且點擊可呼叫 uiShowItem 開啟專案畫面
+  const summaryHtml = PMODashboardApp.renderPortfolioSummaryView(store.summaryData, store);
+  assert.ok(summaryHtml.includes("js-open-aras-item"), "專案清單左側應渲染 Aras Item Icon 按鈕");
+  assert.ok(summaryHtml.includes("data-project-id=\"A101B202C303D404E505F60607080910\""));
+
+  const openRes = PMOApi.openProjectItemInAras("A101B202C303D404E505F60607080910", 2127, fakeArasForUi);
+  assert.equal(openRes.opened, true);
+  assert.equal(openedItemType, "Project");
+  assert.equal(openedItemId, "A101B202C303D404E505F60607080910");
+
+  // 驗證需求 3：切換至成員負荷與工時回報頁籤，檢驗成員工時回報統計圖、使用者工時回報總值連結與各專案工時/工天明細 Modal
+  await store.setActiveTab("ASSIGNEES");
+  const assigneeHtml = PMODashboardApp.renderAssigneeWorkloadView(store.assigneeWorkloadData);
+  assert.ok(assigneeHtml.includes("專案成員工時回報統計"), "應包含專案成員工時回報統計卡片");
+  assert.ok(assigneeHtml.includes("使用者工時回報總值 (總工時 / 工天)"), "成員負荷明細表應包含使用者工時回報總值欄位");
+  assert.ok(assigneeHtml.includes("js-drill-member-worktime"), "成員工時回報總值應包含下鑽連結");
+
+  // 點擊張家豪 (USR_CHANG) 的工時回報連結開啟跨專案工時/工天明細 Modal
+  const member = store.openMemberWorkTimeModal("USR_CHANG");
+  assert.ok(member, "應找到張家豪的工時回報資料");
+  // 張家豪在 2127 (214.6hr)、2135 (365hr)、2142 (495hr) 總計 1074.6 hr = 134.33 工天
+  assert.equal(member.reported_work_hours, 1074.6);
+  assert.equal(member.reported_work_days, 134.33);
+  assert.equal(member.project_worktime_breakdowns.length, 3);
+
+  const modalHtml = PMODashboardApp.renderMemberWorkTimeModalHtml(member);
+  assert.ok(modalHtml.includes("1074.6 hr") && modalHtml.includes("134.33 工天"), "Modal 應顯示該員回報總工時與換算總工天");
+  assert.ok(modalHtml.includes("全球供應鏈協同門戶與派工整合升級案") && modalHtml.includes("495.0 hr"), "Modal 應列出各專案工時明細");
+});

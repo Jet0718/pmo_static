@@ -610,3 +610,295 @@ body, html {
   height: 15px;
   accent-color: var(--brand-primary);
 }
+
+/* ==========================================================================
+   自然語言輸入 NoUI 篩選區塊 (需求 1 & 需求 2)
+   ========================================================================== */
+.pmo-noui-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-card);
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 16px;
+}
+
+.noui-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.noui-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 320px;
+  background: #f8fafc;
+  border: 2px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 6px 10px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.noui-input-wrapper:focus-within {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px var(--brand-primary-light);
+  background: #ffffff;
+}
+
+.noui-ai-icon {
+  font-size: 16px;
+  user-select: none;
+}
+
+.noui-nl-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--text-primary);
+  outline: none;
+  padding: 4px 6px;
+}
+
+.noui-nl-input::placeholder {
+  color: #94a3b8;
+}
+
+.noui-user-badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-context-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  white-space: nowrap;
+}
+
+.user-context-badge.restricted {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.noui-prompt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.noui-row-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.noui-chips-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.noui-prompt-chip {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.noui-prompt-chip:hover {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: #93c5fd;
+}
+
+.noui-prompt-chip.active {
+  background: var(--brand-primary);
+  color: #ffffff;
+  border-color: var(--brand-primary);
+}
+
+.noui-prompt-chip.disabled-chip {
+  opacity: 0.48;
+  cursor: not-allowed;
+  background: #f8fafc;
+}
+
+.noui-active-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  padding-top: 4px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.active-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #334155;
+  font-weight: 600;
+  border: 1px solid #e2e8f0;
+}
+
+.active-filter-pill.highlight {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.noui-restriction-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+/* ==========================================================================
+   專案清單左側 Aras Project Item Icon 按鈕 (需求 4)
+   ========================================================================== */
+.pmo-proj-cell-flex {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.aras-item-open-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #2563eb;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.aras-item-open-btn:hover {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.25);
+}
+
+/* ==========================================================================
+   專案成員工時回報下鑽連結與浮層 Modal (需求 3，掛載於 body 防裁切)
+   ========================================================================== */
+.pmo-worktime-link {
+  color: #2563eb;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.pmo-worktime-link:hover {
+  color: #1d4ed8;
+}
+
+.pmo-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 999998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.pmo-modal-dialog {
+  background: #ffffff;
+  border-radius: 12px;
+  max-width: 780px;
+  width: 100%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 35px -5px rgba(15, 23, 42, 0.28);
+  border: 1px solid #cbd5e1;
+  overflow: hidden;
+}
+
+.pmo-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+  color: #ffffff;
+}
+
+.pmo-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.pmo-modal-close {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pmo-modal-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.pmo-modal-body {
+  padding: 18px 20px;
+  overflow-y: auto;
+}

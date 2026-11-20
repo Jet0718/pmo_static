@@ -1,8 +1,9 @@
 // ============================================================================
 // 檔案名稱：dashboardApp.js
 // 專案名稱：BDM 系統專案進度狀態分析統計模組 (Aras Innovator 12 SP9)
-// 職責說明：整合 PortfolioOverviewRenderer、ProjectDetailRenderer、AssigneeWorkloadRenderer，
-//           負責事件委派、浮層 Tooltip 防裁切渲染與 Aras 12 SP9 視窗連動。
+// 職責說明：整合自然語言 NoUI 篩選器、使用者團隊權限預讀控管、PortfolioOverviewRenderer、
+//           ProjectDetailRenderer、AssigneeWorkloadRenderer 與跨專案工時回報下鑽 Modal，
+//           負責事件委派、浮層防裁切渲染與 Aras 12 SP9 uiShowItem 視窗連動。
 // ============================================================================
 
 (function (root) {
@@ -19,6 +20,107 @@
     if (light === "RED") return "紅燈 (嚴重延遲)";
     if (light === "YELLOW") return "黃燈 (進度警示)";
     return "綠燈 (進度正常)";
+  }
+
+  // 渲染專案清單左側之 Aras Project Item Icon 按鈕 (需求 4：點擊可在 Aras Innovator 開啟該專案 Item 畫面)
+  function renderArasProjectItemIconBtn(projectId = "", projNum = 0, projectName = "") {
+    var safeId = escapeHtml(projectId || "");
+    var safeNum = escapeHtml(String(projNum || ""));
+    var titleText = "在 Aras Innovator 系統中開啟專案 [" + safeNum + "] " + (projectName || "") + " 畫面";
+    return (
+      '<button type="button" class="aras-item-open-btn js-open-aras-item" ' +
+        'data-project-id="' + safeId + '" data-proj-num="' + safeNum + '" ' +
+        'title="' + escapeHtml(titleText) + '" aria-label="' + escapeHtml(titleText) + '">' +
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>' +
+          '<polyline points="14 2 14 8 20 8"></polyline>' +
+          '<line x1="16" y1="13" x2="8" y2="13"></line>' +
+          '<line x1="16" y1="17" x2="8" y2="17"></line>' +
+        '</svg>' +
+      '</button>'
+    );
+  }
+
+  // 渲染當前登入使用者預讀徽章 (需求 2：顯示 user.team_id.keyed_name 與 user.value_score 與權限狀態)
+  function renderUserContextBadgeHtml(userContext = null) {
+    if (!userContext) return "";
+    var name = escapeHtml(userContext.user_name || userContext.login_name || "系統使用者");
+    var team = escapeHtml(userContext.team_code || userContext.raw_team_keyed_name || "未指定");
+    var score = escapeHtml(userContext.value_score || "未設定");
+    var isRestricted = Boolean(userContext.is_team_restricted);
+
+    var lockLabel = isRestricted
+      ? "🔒 限查 " + team + " 團隊"
+      : (userContext.is_managed_exec_team ? "🔓 預設 " + team + " (可跨團隊)" : "🌐 全域查詢權限");
+
+    return (
+      '<div class="user-context-badge' + (isRestricted ? " restricted" : "") + '" id="current-user-context-badge" ' +
+        'title="當前登入者: ' + name + ' | 團隊 (user.team_id.keyed_name): ' + team + ' | 職等 (user.value_score): ' + score + '">' +
+        '<span>👤 ' + name + '</span>' +
+        '<span>| 團隊: <strong>' + team + '</strong></span>' +
+        '<span>| 職等: <strong>' + score + '</strong></span>' +
+        '<span>(' + lockLabel + ')</span>' +
+      '</div>'
+    );
+  }
+
+  // 渲染自然語言 NoUI 常用條件提示標籤 (需求 1 & 需求 2)
+  function renderNoUiPromptChipsHtml(store = null) {
+    var chips = PMOApi.COMMON_NL_PROMPT_CHIPS || [];
+    var uCtx = (store && store.userContext) || null;
+    var currentNl = String((store && store.naturalQuery) || "").trim();
+    var html = "";
+
+    chips.forEach(function (chip) {
+      var isCrossTeamBlocked = Boolean(
+        uCtx &&
+        uCtx.is_team_restricted &&
+        chip.team_only &&
+        chip.team_only.toUpperCase() !== String(uCtx.team_code || "").toUpperCase()
+      );
+      var isActive = currentNl && currentNl.toLowerCase() === String(chip.query || "").toLowerCase();
+      var cls = "noui-prompt-chip js-nl-prompt-chip" +
+                (isActive ? " active" : "") +
+                (isCrossTeamBlocked ? " disabled-chip" : "");
+      var tip = isCrossTeamBlocked
+        ? ("您的職等 (" + (uCtx.value_score || "未設定") + ") 限制僅能查詢所屬 " + uCtx.team_code + " 團隊")
+        : ("點擊套用條件：" + chip.query);
+
+      html +=
+        '<button type="button" class="' + cls + '" data-nl-query="' + escapeHtml(chip.query) + '" title="' + escapeHtml(tip) + '">' +
+          escapeHtml(chip.label) +
+        '</button>';
+    });
+    return html;
+  }
+
+  // 渲染當前自然語言解析後生效的篩選條件摘要膠囊與權限提示 (需求 1 & 需求 2)
+  function renderActiveFilterSummaryHtml(store = null) {
+    var f = (store && store.filters) || {
+      state: "Active",
+      project_type: "1.Standard,2.Professional",
+      territory: "ALL",
+      team_id: "ALL",
+      health_status: "ALL",
+      keyword: ""
+    };
+    var notice = (store && store.restrictionNotice) || "";
+
+    var html =
+      '<span style="color:#64748b;font-weight:700;">目前生效篩選：</span>' +
+      '<span class="active-filter-pill highlight">狀態: ' + escapeHtml(f.state) + '</span>' +
+      '<span class="active-filter-pill highlight">類型: ' + escapeHtml(f.project_type) + '</span>' +
+      '<span class="active-filter-pill' + (f.team_id !== "ALL" ? " highlight" : "") + '">執行團隊: ' + escapeHtml(f.team_id) + '</span>' +
+      '<span class="active-filter-pill' + (f.territory !== "ALL" ? " highlight" : "") + '">服務中心: ' + escapeHtml(f.territory) + '</span>' +
+      '<span class="active-filter-pill' + (f.health_status !== "ALL" ? " highlight" : "") + '">健康度燈號: ' + escapeHtml(f.health_status) + '</span>';
+
+    if (f.keyword) {
+      html += '<span class="active-filter-pill highlight">關鍵字: ' + escapeHtml(f.keyword) + '</span>';
+    }
+    if (notice) {
+      html += '<span class="noui-restriction-notice" id="noui-restriction-alert">' + escapeHtml(notice) + '</span>';
+    }
+    return html;
   }
 
   // 渲染 Ph 1 ~ Ph 12 微縮色塊矩陣 (供專案總覽列表使用)
@@ -39,12 +141,11 @@
 
   // 渲染全域多專案總覽頁籤 (SUMMARY)
   function renderPortfolioSummaryView(data = null, store = null) {
-    // 取得極速團隊長條統計資料 (優先取 store.teamSummaryData，次取 data.team_summary 或本地聚合)
     var teamSummary = (store && store.teamSummaryData) || (data && data.team_summary) || null;
     var selectedTeamId = (store && store.selectedTeamForDrill) || (store && store.filters && store.filters.team_id !== "ALL" ? store.filters.team_id : null);
     var isExpanded = store ? Boolean(store.isDetailExpanded) : Boolean(data && data.summary);
 
-    // 1. 首頁極速展示卡片：執行團隊 (team_id) 專案數量長條統計圖 (隨狀態篩選動態聯動)
+    // 1. 首頁極速展示卡片：執行團隊 (team_id) 專案數量長條統計圖
     var barChartHtml = "";
     if (teamSummary && typeof PMOCharts.renderTeamActiveProjectsBarChart === "function") {
       var currentFilterState = (store && store.filters && store.filters.state) ? String(store.filters.state) : "Active";
@@ -90,6 +191,11 @@
 
     // 2. 若使用者尚未點擊色塊展開明細，顯示高速引導卡片
     if (!isExpanded) {
+      var uCtx = (store && store.userContext) || null;
+      var expandBtnText = (uCtx && uCtx.is_team_restricted && uCtx.team_code)
+        ? ("展開 " + escapeHtml(uCtx.team_code) + " 團隊專案進度明細 &darr;")
+        : "展開全部專案進度明細 &darr;";
+
       var guideHtml =
         '<div class="pmo-card" style="text-align:center;padding:36px 20px;background:#f8fafc;border:2px dashed #cbd5e1;border-radius:12px;">' +
           '<div style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:8px;">' +
@@ -99,7 +205,7 @@
             '系統已先以最快速度載入執行團隊專案數量統計。請<strong>點擊上方長條圖的任一團隊色塊 (如 TPS, ICS, PMO, SUS, SHS, Other)</strong>，或點選下方按鈕展開詳細多專案進度與 Ph 1~12 階段分析。' +
           '</p>' +
           '<button type="button" class="btn-action js-expand-all-teams" style="background:#2563eb;color:#fff;padding:9px 24px;border-radius:6px;font-weight:600;border:none;cursor:pointer;font-size:13px;">' +
-            '展開全部專案進度明細 &darr;' +
+            expandBtnText +
           '</button>' +
         '</div>';
       return barChartHtml + guideHtml;
@@ -185,14 +291,19 @@
       var spiColor = p.spi >= 0.95 ? "#10b981" : (p.spi >= 0.8 ? "#f59e0b" : "#ef4444");
       var cpiColor = p.cpi >= 0.95 ? "#10b981" : (p.cpi >= 0.8 ? "#f59e0b" : "#ef4444");
 
-      // 需求 5：取消獨立下鑽操作欄位，將該欄原本的連結併在專案編號欄中
+      // 需求 4：在專案清單左側增加一個 Item Icon，點擊可在 Aras Innovator 系統中開啟該專案 Item 畫面
       rowsHtml +=
-        '<tr data-proj-num="' + p.proj_num + '">' +
+        '<tr data-proj-num="' + p.proj_num + '" data-project-id="' + escapeHtml(p.id || "") + '">' +
           '<td>' +
-            '<a href="javascript:void(0);" class="pmo-proj-link js-drill-project" data-proj-num="' + p.proj_num + '" title="點擊下鑽查看專案 ' + p.proj_num + ' 階段達成率與成員任務負荷分析">' +
-              p.proj_num +
-            '</a>' +
-            '<br/><small style="color:#64748b;">' + escapeHtml(p.project_type) + '</small>' +
+            '<div class="pmo-proj-cell-flex">' +
+              renderArasProjectItemIconBtn(p.id || "", p.proj_num, p.project_name) +
+              '<div>' +
+                '<a href="javascript:void(0);" class="pmo-proj-link js-drill-project" data-proj-num="' + p.proj_num + '" title="點擊下鑽查看專案 ' + p.proj_num + ' 階段達成率與成員任務負荷分析">' +
+                  p.proj_num +
+                '</a>' +
+                '<br/><small style="color:#64748b;">' + escapeHtml(p.project_type) + '</small>' +
+              '</div>' +
+            '</div>' +
           '</td>' +
           '<td>' +
             '<div style="font-weight:700;color:#0f172a;">' + escapeHtml(p.project_name) + '</div>' +
@@ -220,7 +331,7 @@
     });
 
     if (!rowsHtml) {
-      rowsHtml = '<tr><td colspan="8" style="text-align:center;padding:28px;color:#64748b;">無符合篩選條件的專案資料</td></tr>';
+      rowsHtml = '<tr><td colspan="8" style="text-align:center;padding:28px;color:#64748b;">無符合自然語言篩選條件的專案資料</td></tr>';
     }
 
     var tableHtml =
@@ -232,7 +343,7 @@
           '<table class="pmo-table" id="portfolio-projects-table">' +
             '<thead>' +
               '<tr>' +
-                '<th>專案編號 / 類型</th>' +
+                '<th>Aras / 專案編號 / 類型</th>' +
                 '<th>專案名稱 / 客戶 / 服務中心</th>' +
                 '<th>專案經理 / 團隊</th>' +
                 '<th>健康度燈號</th>' +
@@ -260,7 +371,6 @@
     var assignees = detailData.assignees || [];
     var light = p.health_status || "GREEN";
 
-    // 專案切換下拉選單
     var optionsHtml = "";
     (allProjects || []).forEach(function (item) {
       var sel = item.proj_num === p.proj_num ? " selected" : "";
@@ -271,6 +381,7 @@
       '<div class="pmo-card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">' +
         '<div>' +
           '<div style="display:flex;align-items:center;gap:10px;">' +
+            renderArasProjectItemIconBtn(p.id || "", p.proj_num, p.project_name) +
             '<h2 style="margin:0;font-size:18px;" id="detail-project-title">[' + p.proj_num + '] ' + escapeHtml(p.project_name) + '</h2>' +
             '<span class="health-badge health-' + light + '"><span class="health-dot"></span>' + getHealthLabelText(light) + '</span>' +
           '</div>' +
@@ -289,7 +400,6 @@
         '</div>' +
       '</div>';
 
-    // 單一專案 KPI 摘要
     var kpiHtml =
       '<div class="kpi-grid">' +
         '<div class="kpi-card" style="border-left-color:#2563eb;">' +
@@ -314,7 +424,6 @@
         '</div>' +
       '</div>';
 
-    // Ph 1 ~ Ph 12 階段進度與狀態燈號時間軸
     var phasesGridHtml = '<div class="phase-timeline-grid">';
     (p.phases || []).forEach(function (ph) {
       phasesGridHtml +=
@@ -332,7 +441,6 @@
         phasesGridHtml +
       '</div>';
 
-        // WBS 階段進度達成率與時程偏差分析圖 + 明細表 (嚴格按名稱自然排序升冪：10 -> 20 -> ... -> 60)
     var sortedWbsItems = (wbsItems || []).slice().sort(function (a, b) {
       var nameA = String(a.wbs_name || a.stage_name || "");
       var nameB = String(b.wbs_name || b.stage_name || "");
@@ -391,20 +499,37 @@
     return headerBanner + kpiHtml + phSectionHtml + stageAndAssigneeHtml;
   }
 
-  // 渲染跨專案成員任務負荷與完成狀態統計頁籤 (ASSIGNEES)
+  // 渲染跨專案成員任務負荷與工時回報統計頁籤 (ASSIGNEES，整合需求 3：成員工時回報統計與跨專案工時/工天明細連結)
   function renderAssigneeWorkloadView(assigneeData = null) {
     var assignees = (assigneeData && assigneeData.assignees) || [];
     var totalMembers = assignees.length;
     var overloadCount = assignees.filter(function (a) { return a.load_level === "OVERLOAD" || a.load_level === "HIGH"; }).length;
     var totalTasks = assignees.reduce(function (acc, a) { return acc + Number(a.total_tasks || 0); }, 0);
     var totalOverdue = assignees.reduce(function (acc, a) { return acc + Number(a.overdue_tasks || 0); }, 0);
+    var totalReportedHours = Number(
+      (assigneeData && assigneeData.total_reported_hours !== undefined)
+        ? assigneeData.total_reported_hours
+        : assignees.reduce(function (acc, a) {
+            return acc + Number(a.reported_work_hours !== undefined ? a.reported_work_hours : (a.total_actual_hours || 0));
+          }, 0)
+    );
+    var totalReportedDays = Number(
+      (assigneeData && assigneeData.total_reported_days !== undefined)
+        ? assigneeData.total_reported_days
+        : (totalReportedHours / 8.0)
+    );
 
     var kpiHtml =
       '<div class="kpi-grid">' +
         '<div class="kpi-card" style="border-left-color:#2563eb;">' +
           '<span class="kpi-label">納管專案成員總數 (Assignees)</span>' +
           '<div class="kpi-value" id="kpi-assignee-count">' + totalMembers + ' 位</div>' +
-          '<span class="kpi-sub">跨專案 Activity2 Assignment 與負責人彙總</span>' +
+          '<span class="kpi-sub">跨專案 Activity2 與工時回報成員彙總</span>' +
+        '</div>' +
+        '<div class="kpi-card" style="border-left-color:#0ea5e9;">' +
+          '<span class="kpi-label">篩選範圍工時回報總值</span>' +
+          '<div class="kpi-value" id="kpi-total-reported-hours" style="color:#0284c7;">' + totalReportedHours.toFixed(1) + ' hr</div>' +
+          '<span class="kpi-sub">折合總工天: <strong>' + totalReportedDays.toFixed(2) + ' 工天</strong> (8hr/天)</span>' +
         '</div>' +
         '<div class="kpi-card" style="border-left-color:#ef4444;">' +
           '<span class="kpi-label">高負荷 / 超載預警成員數</span>' +
@@ -426,6 +551,10 @@
     var rowsHtml = "";
     assignees.forEach(function (a) {
       var loadColor = a.load_level === "OVERLOAD" ? "#ef4444" : (a.load_level === "HIGH" ? "#f59e0b" : "#10b981");
+      var repHrs = Number(a.reported_work_hours !== undefined ? a.reported_work_hours : (a.total_actual_hours || 0));
+      var repDays = Number(a.reported_work_days !== undefined ? a.reported_work_days : (repHrs / 8.0));
+      var memberKey = a.assignee_id || a.assignee_name;
+
       rowsHtml +=
         '<tr>' +
           '<td><strong>' + escapeHtml(a.assignee_name) + '</strong></td>' +
@@ -437,19 +566,36 @@
           '<td style="color:' + (a.overdue_tasks > 0 ? "#ef4444;font-weight:800;" : "#64748b;") + '">' + a.overdue_tasks + ' (' + a.overdue_rate + '%)</td>' +
           '<td>' + a.critical_tasks + ' 項</td>' +
           '<td><strong>' + Number(a.completion_rate).toFixed(1) + '%</strong></td>' +
-          '<td>' + a.total_est_hours + ' hr / ' + a.total_actual_hours + ' hr (剩餘 <strong>' + a.remaining_est_hours + ' hr</strong>)</td>' +
+          '<td>' + a.total_est_hours + ' hr (剩餘 <strong>' + a.remaining_est_hours + ' hr</strong>)</td>' +
+          '<td>' +
+            '<a href="javascript:void(0);" class="pmo-worktime-link js-drill-member-worktime" ' +
+              'data-assignee-id="' + escapeHtml(memberKey) + '" ' +
+              'title="點擊深入檢視 ' + escapeHtml(a.assignee_name) + ' 在各專案的工時回報總工時/工天明細">' +
+              '<strong>' + repHrs.toFixed(1) + ' hr</strong> (' + repDays.toFixed(2) + ' 工天) &#128269;' +
+            '</a>' +
+          '</td>' +
           '<td><span style="font-weight:800;color:' + loadColor + ';">' + escapeHtml(a.load_level) + '</span></td>' +
         '</tr>';
     });
 
+    var workTimeChartHtml = typeof PMOCharts.renderMemberWorkTimeReportChart === "function"
+      ? PMOCharts.renderMemberWorkTimeReportChart(assignees)
+      : "";
+
     return (
       kpiHtml +
-      '<div class="pmo-card">' +
-        '<div class="pmo-card-header"><h3>專案成員 (Assignee) 任務負荷與完成狀態堆疊圖</h3></div>' +
-        PMOCharts.renderAssigneeStackedChart(assignees) +
+      '<div class="chart-grid-2">' +
+        '<div class="pmo-card">' +
+          '<div class="pmo-card-header"><h3>專案成員工時回報統計 (當前篩選條件下各成員回報總工時 / 工天)</h3></div>' +
+          workTimeChartHtml +
+        '</div>' +
+        '<div class="pmo-card">' +
+          '<div class="pmo-card-header"><h3>專案成員 (Assignee) 任務負荷與完成狀態堆疊圖</h3></div>' +
+          PMOCharts.renderAssigneeStackedChart(assignees) +
+        '</div>' +
       '</div>' +
       '<div class="pmo-card">' +
-        '<div class="pmo-card-header"><h3>專案成員 (Assignee) 任務負荷與工時統計明細表</h3></div>' +
+        '<div class="pmo-card-header"><h3>專案成員 (Assignee) 任務負荷與使用者工時回報統計明細表 (點擊工時連結可深入檢視各專案工時/工天)</h3></div>' +
         '<div class="table-responsive">' +
           '<table class="pmo-table" id="assignee-workload-table">' +
             '<thead>' +
@@ -463,12 +609,89 @@
                 '<th>已逾期 (逾期率)</th>' +
                 '<th>要徑任務數</th>' +
                 '<th>個人完成率 (%)</th>' +
-                '<th>預估工時 / 實報工時 (剩餘工時)</th>' +
+                '<th>預估工時 (剩餘預估)</th>' +
+                '<th>使用者工時回報總值 (總工時 / 工天)</th>' +
                 '<th>負荷等級</th>' +
               '</tr>' +
             '</thead>' +
             '<tbody>' + rowsHtml + '</tbody>' +
           '</table>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  // 渲染成員在各專案的工時回報總工時/工天明細浮層 Modal (需求 3 & 需求 4)
+  function renderMemberWorkTimeModalHtml(member = null) {
+    if (!member) return "";
+    var name = escapeHtml(member.assignee_name || member.assignee_id || "專案成員");
+    var totalHrs = Number(member.reported_work_hours !== undefined ? member.reported_work_hours : (member.total_actual_hours || 0));
+    var totalDays = Number(member.reported_work_days !== undefined ? member.reported_work_days : (totalHrs / 8.0));
+    var breakdowns = member.project_worktime_breakdowns || [];
+
+    var rowsHtml = "";
+    breakdowns.forEach(function (b) {
+      var hrs = Number(b.reported_hours || 0);
+      var days = Number(b.reported_days !== undefined ? b.reported_days : (hrs / 8.0));
+      var pct = totalHrs > 0 ? Number(((hrs / totalHrs) * 100).toFixed(1)) : 0;
+
+      rowsHtml +=
+        '<tr>' +
+          '<td>' +
+            '<div class="pmo-proj-cell-flex">' +
+              renderArasProjectItemIconBtn(b.project_id || "", b.proj_num, b.project_name) +
+              '<a href="javascript:void(0);" class="pmo-proj-link js-drill-project-from-modal" data-proj-num="' + b.proj_num + '">' +
+                b.proj_num +
+              '</a>' +
+            '</div>' +
+          '</td>' +
+          '<td><strong>' + escapeHtml(b.project_name) + '</strong></td>' +
+          '<td style="font-weight:700;color:#2563eb;">' + hrs.toFixed(1) + ' hr</td>' +
+          '<td style="font-weight:700;color:#0f172a;">' + days.toFixed(2) + ' 工天</td>' +
+          '<td>' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<div class="progress-track" style="width:90px;"><div class="progress-fill" style="width:' + Math.min(100, pct) + '%;background:#2563eb;"></div></div>' +
+              '<span>' + pct.toFixed(1) + '%</span>' +
+            '</div>' +
+          '</td>' +
+        '</tr>';
+    });
+
+    if (!rowsHtml) {
+      rowsHtml = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#64748b;">尚無各專案工時回報明細資料</td></tr>';
+    }
+
+    return (
+      '<div class="pmo-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="worktime-modal-title">' +
+        '<div class="pmo-modal-header">' +
+          '<h3 id="worktime-modal-title">⏱️ 【' + name + '】於各專案之工時回報明細統計 (總工時 / 工天)</h3>' +
+          '<button type="button" class="pmo-modal-close js-close-worktime-modal" title="關閉視窗">&times;</button>' +
+        '</div>' +
+        '<div class="pmo-modal-body">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px;padding:12px 16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;">' +
+            '<div>' +
+              '<span style="font-size:13px;color:#1e40af;font-weight:600;">成員名稱：</span>' +
+              '<strong style="font-size:15px;color:#0f172a;">' + name + '</strong>' +
+              '<span style="margin-left:12px;font-size:12px;color:#475569;">(參與 ' + breakdowns.length + ' 個專案)</span>' +
+            '</div>' +
+            '<div style="font-size:14px;font-weight:800;color:#1d4ed8;">' +
+              '回報總工時：' + totalHrs.toFixed(1) + ' hr &nbsp;|&nbsp; 換算總工天：' + totalDays.toFixed(2) + ' 工天 <small style="font-weight:500;color:#475569;">(8 hr/天)</small>' +
+            '</div>' +
+          '</div>' +
+          '<div class="table-responsive">' +
+            '<table class="pmo-table" id="member-project-worktime-table">' +
+              '<thead>' +
+                '<tr>' +
+                  '<th>Aras / 專案編號</th>' +
+                  '<th>專案名稱</th>' +
+                  '<th>該專案回報總工時 (hr)</th>' +
+                  '<th>換算總工天 (工時 / 8)</th>' +
+                  '<th>工時佔比</th>' +
+                '</tr>' +
+              '</thead>' +
+              '<tbody>' + rowsHtml + '</tbody>' +
+            '</table>' +
+          '</div>' +
         '</div>' +
       '</div>'
     );
@@ -482,6 +705,12 @@
     var apiClient = new PMOApi.ArasApiClient();
     var store = new PMOStore.DashboardStateStore(apiClient);
     var viewContainer = doc.getElementById("pmo-view-container");
+    var nlInput = doc.getElementById("nl-filter-input");
+    var btnApplyNl = doc.getElementById("btn-apply-nl-filter");
+    var btnReset = doc.getElementById("btn-reset-filters");
+    var userBadgeContainer = doc.getElementById("user-context-badge-container");
+    var promptChipsContainer = doc.getElementById("noui-prompt-chips-container");
+    var activeSummaryContainer = doc.getElementById("noui-active-filters-summary");
 
     // 建立掛載於 document.body 之防裁切全域 Tooltip
     var tooltipEl = doc.getElementById("pmo-global-tooltip");
@@ -490,6 +719,16 @@
       tooltipEl.id = "pmo-global-tooltip";
       tooltipEl.className = "pmo-floating-tooltip";
       doc.body.appendChild(tooltipEl);
+    }
+
+    // 建立掛載於 document.body 之防裁切成員工時回報明細 Modal
+    var modalEl = doc.getElementById("pmo-worktime-modal");
+    if (!modalEl && doc.body) {
+      modalEl = doc.createElement("div");
+      modalEl.id = "pmo-worktime-modal";
+      modalEl.className = "pmo-modal-backdrop";
+      modalEl.style.display = "none";
+      doc.body.appendChild(modalEl);
     }
 
     function renderApp(currentStore = store) {
@@ -507,6 +746,21 @@
         }
       }
 
+      // 更新 NoUI 使用者權限預讀徽章、常用提示 Chips 與目前生效條件摘要
+      if (userBadgeContainer) {
+        userBadgeContainer.innerHTML = renderUserContextBadgeHtml(currentStore.userContext);
+      }
+      if (promptChipsContainer) {
+        promptChipsContainer.innerHTML = renderNoUiPromptChipsHtml(currentStore);
+      }
+      if (activeSummaryContainer) {
+        activeSummaryContainer.innerHTML = renderActiveFilterSummaryHtml(currentStore);
+      }
+      if (nlInput && doc.activeElement !== nlInput) {
+        nlInput.value = currentStore.naturalQuery || "";
+      }
+
+      // 渲染主視圖
       if (currentStore.activeTab === "PROJECT_DETAIL") {
         var allProjs = (currentStore.summaryData && currentStore.summaryData.projects) || [];
         viewContainer.innerHTML = renderProjectDetailView(currentStore.projectDetailData, allProjs);
@@ -514,6 +768,17 @@
         viewContainer.innerHTML = renderAssigneeWorkloadView(currentStore.assigneeWorkloadData);
       } else {
         viewContainer.innerHTML = renderPortfolioSummaryView(currentStore.summaryData, currentStore);
+      }
+
+      // 渲染或隱藏成員跨專案工時回報 Modal
+      if (modalEl) {
+        if (currentStore.selectedMemberForWorkTimeModal) {
+          modalEl.innerHTML = renderMemberWorkTimeModalHtml(currentStore.selectedMemberForWorkTimeModal);
+          modalEl.style.display = "flex";
+        } else {
+          modalEl.style.display = "none";
+          modalEl.innerHTML = "";
+        }
       }
     }
 
@@ -532,202 +797,114 @@
       });
     }
 
-    // 綁定篩選器變更事件
-    var filterIds = [
-      { id: "filter-state", key: "state" },
-      { id: "filter-territory", key: "territory" },
-      { id: "filter-team", key: "team_id" },
-      { id: "filter-health", key: "health_status" }
-    ];
-    filterIds.forEach(function (f) {
-      var el = doc.getElementById(f.id);
-      if (el) {
-        el.addEventListener("change", function () {
-          var patch = {};
-          patch[f.key] = el.value;
-          store.updateFilters(patch);
-        });
-      }
-    });
-
-    // 需求 2：專案類型 (cn_project_type 9 大類) 下拉式複選元件監聽與連動
-    var typeDropdown = doc.getElementById("multiselect-project-type");
-    var typeTrigger = doc.getElementById("type-dropdown-trigger");
-    var typePanel = doc.getElementById("type-dropdown-panel");
-    var typeText = doc.getElementById("type-dropdown-text");
-    var typeCheckboxes = doc.querySelectorAll(".js-filter-type");
-    var hiddenTypeInput = doc.getElementById("filter-type");
-    var btnTypeSelectAll = doc.getElementById("btn-type-select-all");
-    var btnTypeClearAll = doc.getElementById("btn-type-clear-all");
-    var btnTypeDefault = doc.getElementById("btn-type-default");
-
-    function updateTypeDropdownDisplay(selectedValues) {
-      if (!typeText) return;
-      if (selectedValues.length === 0) {
-        typeText.textContent = "未選擇專案類型 (0 項)";
-      } else if (selectedValues.length === typeCheckboxes.length) {
-        typeText.textContent = "全部專案類型 (全選 " + selectedValues.length + " 項)";
-      } else {
-        var preview = selectedValues.slice(0, 2).join(", ");
-        if (selectedValues.length > 2) {
-          preview += " 等 " + selectedValues.length + " 項";
-        }
-        typeText.textContent = "已選 " + selectedValues.length + " 項 (" + preview + ")";
-      }
-    }
-
-    function handleTypeCheckboxChange() {
-      var selected = [];
-      for (var i = 0; i < typeCheckboxes.length; i++) {
-        if (typeCheckboxes[i].checked) {
-          selected.push(typeCheckboxes[i].value);
-        }
-      }
-      var typeVal = selected.join(",");
-      if (hiddenTypeInput) hiddenTypeInput.value = typeVal;
-      updateTypeDropdownDisplay(selected);
-      store.updateFilters({ project_type: typeVal || "NONE" });
-    }
-
-    for (var tc = 0; tc < typeCheckboxes.length; tc++) {
-      typeCheckboxes[tc].addEventListener("change", handleTypeCheckboxChange);
-    }
-
-    // 點擊觸發鈕開啟/關閉下拉面板
-    if (typeTrigger && typeDropdown) {
-      typeTrigger.addEventListener("click", function (e) {
-        e.stopPropagation();
-        var isOpen = typeDropdown.classList.contains("open");
-        if (isOpen) {
-          typeDropdown.classList.remove("open");
-          typeTrigger.classList.remove("active");
-          typeTrigger.setAttribute("aria-expanded", "false");
-        } else {
-          typeDropdown.classList.add("open");
-          typeTrigger.classList.add("active");
-          typeTrigger.setAttribute("aria-expanded", "true");
+    // 綁定自然語言輸入框按下 Enter 或點擊「套用查詢」按鈕
+    if (nlInput) {
+      nlInput.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          store.applyNaturalLanguageQuery(nlInput.value);
         }
       });
     }
-
-    // 點擊面板內部不冒泡，防止自動關閉
-    if (typePanel) {
-      typePanel.addEventListener("click", function (e) {
-        e.stopPropagation();
+    if (btnApplyNl && nlInput) {
+      btnApplyNl.addEventListener("click", function () {
+        store.applyNaturalLanguageQuery(nlInput.value);
       });
     }
 
-    // 點擊頁面其他空白處自動收合下拉面板
-    doc.addEventListener("click", function () {
-      if (typeDropdown && typeDropdown.classList.contains("open")) {
-        typeDropdown.classList.remove("open");
-        if (typeTrigger) {
-          typeTrigger.classList.remove("active");
-          typeTrigger.setAttribute("aria-expanded", "false");
-        }
-      }
-    });
-
-    // 快捷鍵：全選
-    if (btnTypeSelectAll) {
-      btnTypeSelectAll.addEventListener("click", function (e) {
-        e.stopPropagation();
-        for (var i = 0; i < typeCheckboxes.length; i++) {
-          typeCheckboxes[i].checked = true;
-        }
-        handleTypeCheckboxChange();
+    // 綁定常用條件提示標籤 (Prompt Chips) 點擊事件
+    if (promptChipsContainer) {
+      promptChipsContainer.addEventListener("click", function (ev) {
+        var chipBtn = ev.target.closest(".js-nl-prompt-chip");
+        if (!chipBtn) return;
+        var q = chipBtn.getAttribute("data-nl-query") || "";
+        if (nlInput) nlInput.value = q;
+        store.applyNaturalLanguageQuery(q);
       });
     }
 
-    // 快捷鍵：清除
-    if (btnTypeClearAll) {
-      btnTypeClearAll.addEventListener("click", function (e) {
-        e.stopPropagation();
-        for (var i = 0; i < typeCheckboxes.length; i++) {
-          typeCheckboxes[i].checked = false;
-        }
-        handleTypeCheckboxChange();
-      });
-    }
-
-    // 快捷鍵：恢復預設 (1.Standard & 2.Professional)
-    if (btnTypeDefault) {
-      btnTypeDefault.addEventListener("click", function (e) {
-        e.stopPropagation();
-        for (var i = 0; i < typeCheckboxes.length; i++) {
-          var val = typeCheckboxes[i].value;
-          typeCheckboxes[i].checked = (val === "1.Standard" || val === "2.Professional");
-        }
-        handleTypeCheckboxChange();
-      });
-    }
-
-    var kwInput = doc.getElementById("filter-keyword");
-    if (kwInput) {
-      kwInput.addEventListener("input", function () {
-        store.updateFilters({ keyword: kwInput.value });
-      });
-    }
-
-    var btnReset = doc.getElementById("btn-reset-filters");
+    // 綁定重置預設按鈕
     if (btnReset) {
       btnReset.addEventListener("click", function () {
-        var elState = doc.getElementById("filter-state");
-        if (elState) elState.value = "Active";
-
-        for (var i = 0; i < typeCheckboxes.length; i++) {
-          typeCheckboxes[i].checked = true;
-        }
-        if (hiddenTypeInput) hiddenTypeInput.value = "1.Standard,2.Professional";
-
-        var elTerr = doc.getElementById("filter-territory");
-        if (elTerr) elTerr.value = "ALL";
-        var elTeam = doc.getElementById("filter-team");
-        if (elTeam) elTeam.value = "ALL";
-        var elHealth = doc.getElementById("filter-health");
-        if (elHealth) elHealth.value = "ALL";
-
-        if (kwInput) kwInput.value = "";
+        if (nlInput) nlInput.value = "";
         store.resetFilters();
       });
     }
 
-    // 綁定內容區域委派事件 (下鑽單一專案、點擊長條圖色塊展開明細、展開全部、收合詳細分析)
+    // 綁定成員工時回報 Modal 點擊事件 (關閉、開啟 Aras 專案畫面、下鑽專案)
+    if (modalEl) {
+      modalEl.addEventListener("click", function (ev) {
+        if (ev.target === modalEl || ev.target.closest(".js-close-worktime-modal")) {
+          store.closeMemberWorkTimeModal();
+          return;
+        }
+        var openArasBtn = ev.target.closest(".js-open-aras-item");
+        if (openArasBtn) {
+          var pid = openArasBtn.getAttribute("data-project-id") || "";
+          var pnum = Number(openArasBtn.getAttribute("data-proj-num") || 0);
+          PMOApi.openProjectItemInAras(pid, pnum, apiClient.arasObj);
+          return;
+        }
+        var drillFromModal = ev.target.closest(".js-drill-project-from-modal");
+        if (drillFromModal) {
+          var targetNum = Number(drillFromModal.getAttribute("data-proj-num") || 0);
+          store.closeMemberWorkTimeModal();
+          store.setActiveTab("PROJECT_DETAIL", targetNum);
+        }
+      });
+    }
+
+    // 綁定內容區域委派事件 (開啟 Aras 專案畫面、開啟成員工時回報下鑽 Modal、點擊長條圖色塊展開明細、下鑽單一專案)
     if (viewContainer) {
       viewContainer.addEventListener("click", function (ev) {
-        // 1. 點擊長條圖色塊或團隊群組展開該團隊明細 (需求 1 & 使用者指定)
+        // 1. 點擊專案清單左側之 Aras Project Item Icon 按鈕 (需求 4)
+        var openArasBtn = ev.target.closest(".js-open-aras-item");
+        if (openArasBtn) {
+          ev.stopPropagation();
+          var projectId = openArasBtn.getAttribute("data-project-id") || "";
+          var projNumForOpen = Number(openArasBtn.getAttribute("data-proj-num") || 0);
+          PMOApi.openProjectItemInAras(projectId, projNumForOpen, apiClient.arasObj);
+          return;
+        }
+
+        // 2. 點擊成員工時回報總值超連結，開啟該員在各專案的工時/工天明細 Modal (需求 3)
+        var worktimeLink = ev.target.closest(".js-drill-member-worktime");
+        if (worktimeLink) {
+          var assigneeId = worktimeLink.getAttribute("data-assignee-id") || "";
+          store.openMemberWorkTimeModal(assigneeId);
+          return;
+        }
+
+        // 3. 點擊長條圖色塊或團隊群組展開該團隊明細
         var teamBar = ev.target.closest(".js-team-bar-item") || ev.target.closest(".team-bar-group");
         if (teamBar) {
           var teamId = teamBar.getAttribute("data-team-id") || "ALL";
-          var elTeam = doc.getElementById("filter-team");
-          if (elTeam) elTeam.value = teamId;
           store.expandTeamDetail(teamId);
           return;
         }
 
-        // 2. 點擊展開全部團隊專案明細按鈕
+        // 4. 點擊展開全部團隊專案明細按鈕
         var expandAllBtn = ev.target.closest(".js-expand-all-teams");
         if (expandAllBtn) {
-          var elTeamAll = doc.getElementById("filter-team");
-          if (elTeamAll) elTeamAll.value = "ALL";
           store.expandTeamDetail("ALL");
           return;
         }
 
-        // 3. 點擊收合詳細分析按鈕
+        // 5. 點擊收合詳細分析按鈕
         var collapseBtn = ev.target.closest(".js-collapse-detail");
         if (collapseBtn) {
           store.collapseDetail();
           return;
         }
 
-        // 4. 點擊專案編號 (或下鑽連結) 切換至單一專案下鑽視圖 (需求 5)
+        // 6. 點擊專案編號切換至單一專案下鑽視圖
         var drillBtn = ev.target.closest(".js-drill-project");
         if (drillBtn) {
           var projNum = Number(drillBtn.getAttribute("data-proj-num") || 0);
           store.setActiveTab("PROJECT_DETAIL", projNum);
           return;
         }
+
         var backBtn = ev.target.closest("#btn-back-summary");
         if (backBtn) {
           store.setActiveTab("SUMMARY");
@@ -768,10 +945,15 @@
 
   var exported = {
     getHealthLabelText: getHealthLabelText,
+    renderArasProjectItemIconBtn: renderArasProjectItemIconBtn,
+    renderUserContextBadgeHtml: renderUserContextBadgeHtml,
+    renderNoUiPromptChipsHtml: renderNoUiPromptChipsHtml,
+    renderActiveFilterSummaryHtml: renderActiveFilterSummaryHtml,
     renderPhaseMiniMatrix: renderPhaseMiniMatrix,
     renderPortfolioSummaryView: renderPortfolioSummaryView,
     renderProjectDetailView: renderProjectDetailView,
     renderAssigneeWorkloadView: renderAssigneeWorkloadView,
+    renderMemberWorkTimeModalHtml: renderMemberWorkTimeModalHtml,
     initDashboardApp: initDashboardApp
   };
 

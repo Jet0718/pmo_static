@@ -26,120 +26,42 @@
           2. 階段達成率與時程偏差分析 (Ph 1~12 &amp; WBS)
         </button>
         <button type="button" class="pmo-tab-btn" data-tab="ASSIGNEES" id="tab-btn-assignees">
-          3. 專案成員 (Assignee) 任務負荷統計
+          3. 專案成員任務負荷與工時回報統計
         </button>
       </nav>
     </header>
 
-    <!-- 多維度篩選工具列 -->
-    <section class="pmo-filter-bar" aria-label="專案篩選條件">
-      <div class="filter-item">
-        <label for="filter-state">專案狀態 (state)：</label>
-        <select id="filter-state" class="filter-control">
-          <option value="Active" selected>進行中 (Active)</option>
-          <option value="ALL">全部狀態 (ALL)</option>
-          <option value="closed">已結案 (closed)</option>
-          <option value="pending">暫停中 (pending)</option>
-        </select>
-      </div>
-      <div class="filter-item">
-        <label>專案類型 (cn_project_type)：</label>
-        <div class="multiselect-dropdown" id="multiselect-project-type">
-          <div class="multiselect-trigger" id="type-dropdown-trigger" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false">
-            <span class="multiselect-trigger-text" id="type-dropdown-text">已選 2 項 (1.Standard, 2.Professional)</span>
-            <span class="multiselect-trigger-arrow">&#9662;</span>
-          </div>
-          <div class="multiselect-panel" id="type-dropdown-panel">
-            <div class="multiselect-actions">
-              <span style="font-size:12px;font-weight:700;color:#64748b;">複選專案類型</span>
-              <div style="display:flex;gap:6px;">
-                <button type="button" class="multiselect-action-btn" id="btn-type-select-all">全選</button>
-                <button type="button" class="multiselect-action-btn" id="btn-type-clear-all">清除</button>
-                <button type="button" class="multiselect-action-btn" id="btn-type-default">預設(1&2)</button>
-              </div>
-            </div>
-            <div class="multiselect-options" id="filter-type-checkboxes">
-              <label class="multiselect-option">
-                <input type="checkbox" class="js-filter-type" value="1.Standard" checked /> 1.Standard
-              </label>
-              <label class="multiselect-option">
-                <input type="checkbox" class="js-filter-type" value="2.Professional" checked /> 2.Professional
-              </label>
-              <label class="multiselect-option">
-                <input type="checkbox" class="js-filter-type" value="3.Upgrade" /> 3.Upgrade
-              </label>
-              <label class="multiselect-option">
-                <input type="checkbox" class="js-filter-type" value="4.Customize" /> 4.Customize
-              </label>
-              <label class="multiselect-option">
-                <input type="checkbox" class="js-filter-type" value="5.Product" /> 5.Product
-              </label>
-              <label class="multiselect-option">
-                <input type="checkbox" class="js-filter-type" value="6.Technical" /> 6.Technical
-              </label>
-              <label class="multiselect-option">
-                <input type="checkbox" class="js-filter-type" value="7.Marketing" /> 7.Marketing
-              </label>
-              <label class="multiselect-option">
-                <input type="checkbox" class="js-filter-type" value="8.EmployeeTraining" /> 8.EmployeeTraining
-              </label>
-              <label class="multiselect-option">
-                <input type="checkbox" class="js-filter-type" value="F.Misc" /> F.Misc
-              </label>
-            </div>
-          </div>
+    <!-- 自然語言 NoUI 智慧篩選與使用者團隊權限預讀區塊 (需求 1 & 需求 2) -->
+    <section class="pmo-noui-filter-bar" aria-label="自然語言專案篩選條件">
+      <div class="noui-top-row">
+        <div class="noui-input-wrapper">
+          <span class="noui-ai-icon" aria-hidden="true">&#10024;</span>
+          <input
+            type="text"
+            id="nl-filter-input"
+            class="noui-nl-input"
+            placeholder="請以自然語言輸入篩選條件（例如：進行中 TPS 紅燈專案、新竹 customize、陳建宏、2127）... 預設保留 Standard 與 Professional"
+            autocomplete="off"
+          />
+          <button type="button" class="btn-action noui-apply-btn" id="btn-apply-nl-filter">
+            套用查詢
+          </button>
+          <button type="button" class="btn-action btn-secondary noui-reset-btn" id="btn-reset-filters">
+            重置預設
+          </button>
         </div>
-        <input type="hidden" id="filter-type" value="1.Standard,2.Professional" />
+        <!-- 當前使用者 (user.team_id.keyed_name 與 user.value_score) 預讀狀態徽章 -->
+        <div id="user-context-badge-container" class="noui-user-badge-wrap"></div>
       </div>
 
-      <div class="filter-item">
-        <label for="filter-territory">服務中心 (territory)：</label>
-        <select id="filter-territory" class="filter-control">
-          <option value="ALL">全部服務中心 (ALL)</option>
-          <option value="台北服務中心">台北服務中心</option>
-          <option value="新竹服務中心">新竹服務中心</option>
-          <option value="台中服務中心">台中服務中心</option>
-          <option value="台南服務中心">台南服務中心</option>
-        </select>
+      <!-- 常用條件提示標籤 (Prompt Chips) -->
+      <div class="noui-prompt-row">
+        <span class="noui-row-label">💡 常用條件提示：</span>
+        <div id="noui-prompt-chips-container" class="noui-chips-list"></div>
       </div>
 
-      <div class="filter-item">
-        <label for="filter-team">執行團隊 (team_id)：</label>
-        <select id="filter-team" class="filter-control">
-          <option value="ALL">全部團隊 (ALL)</option>
-          <option value="TPS">TPS</option>
-          <option value="ICS">ICS</option>
-          <option value="PMO">PMO</option>
-          <option value="SUS">SUS</option>
-          <option value="SHS">SHS</option>
-          <option value="Other">Other</option>
-        </select>
-      </div>
-
-      <div class="filter-item">
-        <label for="filter-health">健康度燈號：</label>
-        <select id="filter-health" class="filter-control">
-          <option value="ALL">全部燈號 (ALL)</option>
-          <option value="GREEN">綠燈 (進度正常)</option>
-          <option value="YELLOW">黃燈 (進度警示)</option>
-          <option value="RED">紅燈 (嚴重延遲)</option>
-        </select>
-      </div>
-
-      <div class="filter-item" style="flex: 1; min-width: 200px;">
-        <label for="filter-keyword">關鍵字：</label>
-        <input
-          type="text"
-          id="filter-keyword"
-          class="filter-control"
-          style="width: 100%;"
-          placeholder="搜尋專案編號、名稱、客戶或專案經理..."
-        />
-      </div>
-
-      <button type="button" class="btn-action btn-secondary" id="btn-reset-filters">
-        重置篩選
-      </button>
+      <!-- 當前解析生效之篩選條件摘要與權限提示 -->
+      <div id="noui-active-filters-summary" class="noui-active-summary"></div>
     </section>
 
     <!-- 動態視圖渲染容器 -->

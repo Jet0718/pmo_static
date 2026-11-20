@@ -9,6 +9,18 @@
 /// </summary>
 public class Innovator
 {
+    public string CurrentUserId { get; set; }
+
+    public Innovator()
+    {
+        this.CurrentUserId = "USER_TEST_01";
+    }
+
+    public string getUserID()
+    {
+        return this.CurrentUserId;
+    }
+
     public Item newItem(string typeName, string action)
     {
         return new Item(typeName, action);
@@ -67,6 +79,11 @@ public class Item
     public string getID()
     {
         return this.IdValue;
+    }
+
+    public void setID(string id)
+    {
+        this.IdValue = id;
     }
 
     public void setAttribute(string name, string value)

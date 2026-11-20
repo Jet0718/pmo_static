@@ -5,9 +5,40 @@
 
 public class FakeProjectRepository : IProjectRepository
 {
+    public UserContextDto CurrentUser = new UserContextDto();
     public System.Collections.Generic.List<ProjectRecord> Projects = new System.Collections.Generic.List<ProjectRecord>();
     public System.Collections.Generic.List<WbsRecord> WbsList = new System.Collections.Generic.List<WbsRecord>();
     public System.Collections.Generic.List<ActivityRecord> Activities = new System.Collections.Generic.List<ActivityRecord>();
+    public System.Collections.Generic.List<WorkTimeRecordEntry> WorkTimeRecords = new System.Collections.Generic.List<WorkTimeRecordEntry>();
+
+    public UserContextDto GetCurrentUserContext()
+    {
+        return this.CurrentUser ?? new UserContextDto();
+    }
+
+    public System.Collections.Generic.List<WorkTimeRecordEntry> GetWorkTimeRecords(
+        System.Collections.Generic.List<ProjectRecord> projects
+    )
+    {
+        System.Collections.Generic.List<WorkTimeRecordEntry> res = new System.Collections.Generic.List<WorkTimeRecordEntry>();
+        if (projects == null || projects.Count == 0) return res;
+        System.Collections.Generic.HashSet<int> pNums = new System.Collections.Generic.HashSet<int>();
+        System.Collections.Generic.HashSet<string> pIds = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < projects.Count; i++)
+        {
+            if (projects[i].ProjNum > 0) pNums.Add(projects[i].ProjNum);
+            if (!string.IsNullOrEmpty(projects[i].Id)) pIds.Add(projects[i].Id);
+        }
+        for (int i = 0; i < this.WorkTimeRecords.Count; i++)
+        {
+            WorkTimeRecordEntry w = this.WorkTimeRecords[i];
+            if ((w.ProjNum > 0 && pNums.Contains(w.ProjNum)) || (!string.IsNullOrEmpty(w.ProjectId) && pIds.Contains(w.ProjectId)))
+            {
+                res.Add(w);
+            }
+        }
+        return res;
+    }
 
     public System.Collections.Generic.List<ProjectRecord> GetProjects(AnalyticsQueryDto query)
     {
@@ -41,14 +72,8 @@ public class FakeProjectRepository : IProjectRepository
                 if (!string.IsNullOrEmpty(query.TeamId) &&
                     !string.Equals(query.TeamId, "ALL", System.StringComparison.OrdinalIgnoreCase))
                 {
-                    if (string.Equals(query.TeamId, "Other", System.StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (p.TeamId == "TPS" || p.TeamId == "ICS" || p.TeamId == "PMO" || p.TeamId == "SUS" || p.TeamId == "SHS")
-                        {
-                            continue;
-                        }
-                    }
-                    else if (!string.Equals(p.TeamId, query.TeamId, System.StringComparison.OrdinalIgnoreCase))
+                    string normTeam = ArasProjectRepository.NormalizeTeamCode(p.TeamName, p.TeamId);
+                    if (!string.Equals(normTeam, query.TeamId, System.StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }
@@ -134,6 +159,7 @@ public class Program
         TestWbsStageHierarchyAndVariance();
         TestAssigneeWorkloadAggregation();
         TestRestfulControllerRoutesAndSqlSanitization();
+        TestUserTeamValueScorePolicyAndWorkTimeReporting();
 
         System.Console.WriteLine("======================================================");
         System.Console.WriteLine("測試總結: 通過 " + _passed + " 項, 失敗 " + _failed + " 項");
@@ -452,5 +478,84 @@ public class Program
         }
         AssertTrue(agg2348.Count == 4 && !hasLuo,
             "專案 2348 成員負荷統計：扣除 Milestone 任務 (羅仁) 忽略不計後，應精確計為 4 位成員 (武軍、袁浩、練馨璐、胡彬)");
+    }
+
+    /// <summary>
+    /// 測試 6：驗證使用者預讀 (user.team_id.keyed_name 與 user.value_score) 團隊權限控管與專案成員工時回報統計 (總工時/工天/各專案下鑽明細)
+    /// </summary>
+    private static void TestUserTeamValueScorePolicyAndWorkTimeReporting()
+    {
+        System.DateTime today = new System.DateTime(2026, 11, 20);
+
+        // 1. 測試 UserContext 規則：TPS 且 V8 -> IsManagedExecTeam=true, DefaultTeamFilter=TPS, IsTeamRestricted=true (限制查詢其他團隊)
+        UserContextDto ctxTpsV8 = ArasProjectRepository.BuildUserContextFromFields("U1", "allen.chang", "張國倫 Allen.chang", "604F804DDA84451CA3B6CB54CD905BC9", "TPS", "V8");
+        AssertTrue(ctxTpsV8.IsManagedExecTeam && ctxTpsV8.DefaultTeamFilter == "TPS" && ctxTpsV8.IsTeamRestricted,
+            "使用者權限預讀 (TPS + V8)：預設團隊為 TPS 且應限制查詢其他執行團隊 (IsTeamRestricted=true)");
+
+        // 2. 測試 UserContext 規則：TPS 且 V9 -> IsManagedExecTeam=true, DefaultTeamFilter=TPS, IsTeamRestricted=false (允許跨團隊)
+        UserContextDto ctxTpsV9 = ArasProjectRepository.BuildUserContextFromFields("U2", "tps.lead", "TPS主管", "604F804DDA84451CA3B6CB54CD905BC9", "TPS", "V9");
+        AssertTrue(ctxTpsV9.IsManagedExecTeam && ctxTpsV9.DefaultTeamFilter == "TPS" && !ctxTpsV9.IsTeamRestricted,
+            "使用者權限預讀 (TPS + V9)：預設團隊為 TPS 但允許查詢其他執行團隊 (IsTeamRestricted=false)");
+
+        // 3. 測試 UserContext 規則：ICS 且 V10 -> IsManagedExecTeam=true, DefaultTeamFilter=ICS, IsTeamRestricted=false
+        UserContextDto ctxIcsV10 = ArasProjectRepository.BuildUserContextFromFields("U3", "ics.dir", "ICS總監", "0DE0880740CF41E68518D86891A9B83A", "ICS", "V10");
+        AssertTrue(ctxIcsV10.IsManagedExecTeam && ctxIcsV10.DefaultTeamFilter == "ICS" && !ctxIcsV10.IsTeamRestricted,
+            "使用者權限預讀 (ICS + V10)：預設團隊為 ICS 但允許查詢其他執行團隊 (IsTeamRestricted=false)");
+
+        // 4. 測試 UserContext 規則：SUS 無職等 (空字串) -> 限制查詢其他執行團隊
+        UserContextDto ctxSusNone = ArasProjectRepository.BuildUserContextFromFields("U4", "sus.eng", "SUS工程師", "", "SUS", "");
+        AssertTrue(ctxSusNone.IsManagedExecTeam && ctxSusNone.DefaultTeamFilter == "SUS" && ctxSusNone.IsTeamRestricted,
+            "使用者權限預讀 (SUS + 無職等)：預設團隊為 SUS 且限制查詢其他執行團隊");
+
+        // 5. 測試 UserContext 規則：PMO 且 V9 -> 非四大受限團隊，DefaultTeamFilter=ALL, IsTeamRestricted=false
+        UserContextDto ctxPmoV9 = ArasProjectRepository.BuildUserContextFromFields("U5", "jet.lo", "羅仁 Jet", "CDE4225D27224672B7CDDD497486C5AA", "PMO", "V9");
+        AssertTrue(!ctxPmoV9.IsManagedExecTeam && ctxPmoV9.DefaultTeamFilter == "ALL" && !ctxPmoV9.IsTeamRestricted,
+            "使用者權限預讀 (PMO + V9)：預設查詢全部團隊 (ALL) 且不限制跨團隊查詢");
+
+        // 6. 測試 Controller 強制鎖定非 V9/V10 成員跨團隊查詢
+        FakeProjectRepository repo = new FakeProjectRepository();
+        repo.CurrentUser = ctxTpsV8; // TPS + V8 (受限只能看 TPS)
+        repo.Projects.Add(new ProjectRecord { Id = "P_TPS", ProjNum = 2127, Name = "TPS專案", State = "Active", ProjectType = "1.Standard", TeamId = "TPS", TeamName = "TPS" });
+        repo.Projects.Add(new ProjectRecord { Id = "P_ICS", ProjNum = 2135, Name = "ICS專案", State = "Active", ProjectType = "2.Professional", TeamId = "ICS", TeamName = "ICS" });
+
+        ProjectHealthCalculator healthCalc = new ProjectHealthCalculator();
+        WbsStageAnalyzer stageAnalyzer = new WbsStageAnalyzer(healthCalc);
+        WorkloadAggregator workloadAgg = new WorkloadAggregator();
+        ProjectAnalyticsController ctrl = new ProjectAnalyticsController(repo, healthCalc, stageAnalyzer, workloadAgg);
+
+        // 即使請求傳入 team_id = ICS 或 ALL，後端仍應強制鎖定為 TPS，只回傳 2127
+        Item reqTryIcs = new Item("Method", "PMO_ProjectAnalytics_API");
+        reqTryIcs.setProperty("route", "/api/v1/dashboard/summary");
+        reqTryIcs.setProperty("team_id", "ICS");
+        string jsonRestricted = ctrl.HandleItemRequest(reqTryIcs, today);
+        AssertTrue(jsonRestricted.Contains("\"effective_team_filter\":\"TPS\"") &&
+                   jsonRestricted.Contains("\"total_projects\":1") &&
+                   jsonRestricted.Contains("TPS專案") &&
+                   !jsonRestricted.Contains("ICS專案"),
+            "跨團隊權限攔截驗證：TPS (V8) 使用者即使請求 team_id=ICS，後端仍強制鎖定僅回傳 TPS 專案");
+
+        // 7. 測試專案成員工時回報統計 (workingtime_record 聚合 + 總工時/總工天 + 各專案下鑽明細)
+        repo.CurrentUser = ctxPmoV9; // 切換為 PMO V9 檢視全域
+        repo.Activities.Add(new ActivityRecord { Id = "A_2127_1", ProjNum = 2127, Name = "架構設計", AssigneeId = "USR_CHANG", AssigneeName = "張家豪 (全端工程師)", State = "Active", PercentCompl = 50, WorkEst = 80, ActualWork = 40 });
+        repo.Activities.Add(new ActivityRecord { Id = "A_2135_1", ProjNum = 2135, Name = "介面開發", AssigneeId = "USR_CHANG", AssigneeName = "張家豪 (全端工程師)", State = "Complete", PercentCompl = 100, WorkEst = 60, ActualWork = 56 });
+
+        repo.WorkTimeRecords.Add(new WorkTimeRecordEntry { Id = "WT1", ProjectId = "P_TPS", ProjNum = 2127, ProjectName = "TPS專案", MemberId = "USR_CHANG", MemberName = "張家豪 (全端工程師)", WorkHours = 24.0 });
+        repo.WorkTimeRecords.Add(new WorkTimeRecordEntry { Id = "WT2", ProjectId = "P_TPS", ProjNum = 2127, ProjectName = "TPS專案", MemberId = "USR_CHANG", MemberName = "張家豪 (全端工程師)", WorkHours = 16.0 });
+        repo.WorkTimeRecords.Add(new WorkTimeRecordEntry { Id = "WT3", ProjectId = "P_ICS", ProjNum = 2135, ProjectName = "ICS專案", MemberId = "USR_CHANG", MemberName = "張家豪 (全端工程師)", WorkHours = 56.0 });
+
+        Item reqAsgnWt = new Item("Method", "PMO_ProjectAnalytics_API");
+        reqAsgnWt.setProperty("route", "/api/v1/dashboard/assignees");
+        reqAsgnWt.setProperty("state", "Active");
+        string jsonAsgnWt = ctrl.HandleItemRequest(reqAsgnWt, today);
+
+        // 張家豪總回報工時 = 24 + 16 + 56 = 96 小時 = 12 工天 (2127: 40hr / 5工天, 2135: 56hr / 7工天)
+        AssertTrue(jsonAsgnWt.Contains("\"reported_work_hours\":96") &&
+                   jsonAsgnWt.Contains("\"reported_work_days\":12") &&
+                   jsonAsgnWt.Contains("\"project_worktime_breakdowns\":[") &&
+                   jsonAsgnWt.Contains("\"reported_hours\":56") &&
+                   jsonAsgnWt.Contains("\"reported_days\":7") &&
+                   jsonAsgnWt.Contains("\"reported_hours\":40") &&
+                   jsonAsgnWt.Contains("\"reported_days\":5"),
+            "成員工時回報統計驗證：應正確聚合總回報工時 96 hr (12 工天) 與各專案工時/工天明細");
     }
 }

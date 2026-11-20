@@ -19,9 +19,13 @@
     首頁載入時提供極速輕量端點 `/api/v1/dashboard/team-summary`，僅檢索 Project 主檔並聚合團隊專案數，完全繞過龐大的 WBS 與 Activity2 關聯運算，將首頁渲染時間降至毫秒級。
 - **客戶端 (Frontend)**：掛載於 Aras TOC (Table of Contents `Portfolio` / `Dashboards` 類別) 的 **獨立全域多專案儀表板 (`PMO_ProgressDashboard.html`)**。
   - 採用遵循 S.O.L.I.D 原則之原生模組化 JavaScript + 響應式現代深淺雙模 UI 與原生 SVG/Canvas 互動圖表引擎（零外部網路依賴，確保內網與 iframe 嵌入 100% 穩定執行）。
-  - 首頁優先載入「各執行團隊 (team_id) 專案數量長條統計圖」，長條圖統計結果即時聯動篩選條件（依專案狀態、專案類型、服務中心等動態聚合計算），點擊長條圖各團隊色塊即漸進展開該團隊之多專案進度詳細分析。
-  - 專案類型 (`cn_project_type`) 支援 9 大完整類型複選 (OR 比對：`1.Standard`, `2.Professional`, `3.Upgrade`, `4.Customize`, `5.Product`, `6.Technical`, `7.Marketing`, `8.EmployeeTraining`, `F.Misc`)，預設選中 `1.Standard` 與 `2.Professional`；專案狀態 (`state`) 預設為 `Active`；執行團隊選項清單純淨顯示為 `TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`（嚴禁附加「XX團隊」等冗餘中文後綴；後端支援 Team GUID 快取映射與 `team_id/@keyed_name` 雙重解析，確保準確依團隊計量，杜絕全部歸入 Other）。
-  - 總覽表取消獨立下鑽操作欄位，將下鑽連結整合至第一欄專案編號。
+  - **自然語言輸入 NoUI 智慧篩選架構**：將傳統多欄位下拉篩選區塊全面升級為 **自然語言輸入框 (NoUI Search Bar)**，保留預設篩選條件 `cn_project_type = 1.Standard, 2.Professional` 且 `state = Active`，並提供常用篩選條件提示標籤 (Prompt Chips) 與即時解析之條件膠囊 (Active Filter Pills)。
+  - **當前登入使用者預讀與執行團隊權限控管 (`user.team_id.keyed_name` & `user.value_score`)**：
+    - 預讀當前登入之 `User` 物件的 `team_id/@keyed_name` 與 `value_score`。
+    - 若 `user.team_id.keyed_name` 為 `TPS`、`SUS`、`SHS` 或 `ICS` 者，篩選條件自動增加與 `project.team_id` (執行團隊) 相符合者。
+    - 若符合上述四個執行團隊，且 `user.value_score` **不等於 `V9` 且不等於 `V10`**，則系統強制限制僅能查詢自身所屬執行團隊（禁止查詢其他執行團隊）。
+  - **專案清單左側 Aras Item Icon 開啟專案畫面**：在專案清單第一欄左側提供專案 Item Icon 按鈕，點擊可呼叫 `top.aras.uiShowItem("Project", projectId)` 直接於 Aras Innovator 系統中開啟該專案 Item 表單畫面；點擊專案編號則維持下鑽至單一專案階段與成員分析視圖。
+  - **專案成員工時回報統計與跨專案下鑽明細 (`workingtime_record`)**：新增對當前篩選條件下各成員回報任務之工時統計總值排行，並於專案成員任務負荷統計表中增加「使用者工時回報總值」下鑽連結，點擊可開啟浮層檢視該成員在各專案的回報總工時 (`hr`) 與總工天 (`工時 / 8`) 明細。
 
 ### 1.2 架構圖
 ```mermaid
@@ -121,11 +125,17 @@ flowchart TB
 | | `cn_remainder` | 剩餘工時 | float | 剩餘工時 |
 | | `cn_bug_imp_rate` | 預算執行率 | float | 預算執行率 (%) |
 
-### 2.2 `WBS Element` 與 `Activity2` 關聯欄位
+### 2.2 `WBS Element`、`Activity2`、`workingtime_record` 與 `User` 關聯欄位
+- **`User` (當前登入使用者權限與團隊預讀)**：
+  - `id`、`login_name`、`keyed_name`
+  - `team_id` (所屬執行團隊 Item `Team`，讀取 `team_id/@keyed_name`，如 `TPS`、`SUS`、`SHS`、`ICS`、`PMO`)
+  - `value_score` (職等/價值評分 List，如 `V5` ~ `V10`；當所屬團隊為 `TPS`/`SUS`/`SHS`/`ICS` 且 `value_score` 非 `V9`/`V10` 時，限制僅能查詢所屬執行團隊之專案)
 - **`WBS Element`**：`id`, `proj_num`, `wbs_index`, `name`, `is_top`, `classification` (`Phase`/`Milestone`/`Task`), `rollup_duration`, `rollup_status`, `rollup_percent_compl`, `rollup_date_sched_start`, `rollup_date_sched_due`, `rollup_date_start_act`, `rollup_earned_value`, `rollup_planned_value`, `rollup_work_est`, `rollup_actual_work`, `spi`, `cpi`, `cn_sv`, `cn_cv`, `owned_by_id`, `managed_by_id`, `team_id`。
   - *注意*：`WBS Element` 無 `parent_wbs_id` 屬性，父子階層由 `Sub WBS` (`source_id` -> `related_id`) 建立。
-- **`Activity2`**：`id`, `proj_num`, `name`, `state`, `status`, `is_milestone`, `is_critical`, `percent_compl`, `work_est`, `actual_work`, `date_start_sched`, `date_due_sched`, `date_start_act`, `date_due_act`, `days_remaining`, `earned_value`, `planned_value`, `spi`, `cpi`, `cn_sv`, `cn_cv`, `owned_by_id`, `managed_by_id`, `team_id`。
+- **`Activity2`**：`id`, `proj_num`, `name`, `state`, `status`, `is_milestone`, `is_critical`, `percent_compl`, `work_est`, `actual_work`, `rollup_actual_work` (任務滾算實報工時), `date_start_sched`, `date_due_sched`, `date_start_act`, `date_due_act`, `days_remaining`, `earned_value`, `planned_value`, `spi`, `cpi`, `cn_sv`, `cn_cv`, `owned_by_id`, `managed_by_id`, `team_id`。
 - **`Activity2 Assignment`**：`source_id` (`Activity2`), `related_id` (`Identity` 專案成員), `percent_load`, `work_est`, `percent_compl`。
+- **`workingtime_record` (工時回報記錄，母表為 `WorkingTime` 工時卡)**：
+  - `id`, `source_id` (`WorkingTime` ID), `project` (`Project` Item ID 及 `@keyed_name`), `cn_act2` (任務名稱), `work_hour` (float, 工作時數), `work_date` (date, 工作日), `owned_by_id` (`Identity` 回報成員 ID 與 `@keyed_name`), `created_by_id` (`User` 建立者)。
 
 ---
 
@@ -165,18 +175,38 @@ flowchart TB
        - 若階段未完成且已逾預計完成日：$\text{Today} - \text{rollup\_date\_sched\_due}$（正值表示延遲天數）。
        - 同時統計該階段下轄子任務之：`總數`、`已完成`、`進行中`、`未開始`、`已逾期`。
 
-### 3.3 專案成員 (`Assignee`) 任務負荷與完成狀態統計
-- 優先讀取 `Activity2 Assignment` 的指派成員 (`related_id`)，若該任務無 Assignment 子表紀錄，則回退讀取 `Activity2.owned_by_id`（若再無則讀取 `managed_by_id`）。
-- 針對每位成員統計：
-  - `totalTasks` (總指派任務數)
-  - `completedTasks` (已完成任務數：`state == 'Complete'` 或 `status == 'completed'` 或 `percent_compl >= 100`)
-  - `inProgressTasks` (進行中任務數：`0 < percent_compl < 100` 或 `state == 'Active'`)
-  - `pendingTasks` (未開始任務數：`percent_compl == 0` 且未開始)
-  - `overdueTasks` (已逾期未完成任務數：`date_due_sched < Today` 且未完成)
-  - `criticalTasks` (負責之要徑任務數)
-  - `totalEstHours` (總預估工時 `work_est`)、`totalActualHours` (總實報工時 `actual_work`)
-  - `completionRate` (個人任務完成率 `%`)
-  - `loadLevel` (負荷等級：依進行中+未開始任務數或剩餘工時判定 `HIGH` / `NORMAL` / `LOW`)
+### 3.3 專案成員 (`Assignee`) 任務負荷與工時回報統計 (`workingtime_record`)
+- **任務指派統計**：優先讀取 `Activity2.managed_by_id`，若為空則讀取 `Activity2 Assignment` 的指派成員 (`related_id`) 或回退讀取 `Activity2.owned_by_id`，並自動扣除里程碑任務 (`is_milestone == '1'`)。
+- **工時回報統計 (`workingtime_record` 聚合)**：
+  - 針對當前篩選條件下的所有專案，檢索 `workingtime_record` 中 `project` 屬於該批專案之工時回報紀錄（若無獨立 `workingtime_record` 紀錄時，亦支援由該成員於各專案 `Activity2` 任務之 `rollup_actual_work` / `actual_work` 彙總）。
+  - 針對每位成員統計：
+    - `totalTasks` (總指派任務數)
+    - `completedTasks` (已完成任務數：`state == 'Complete'` 或 `status == 'completed'` 或 `percent_compl >= 100`)
+    - `inProgressTasks` (進行中任務數：`0 < percent_compl < 100` 或 `state == 'Active'`)
+    - `pendingTasks` (未開始任務數：`percent_compl == 0` 且未開始)
+    - `overdueTasks` (已逾期未完成任務數：`date_due_sched < Today` 且未完成)
+    - `criticalTasks` (負責之要徑任務數)
+    - `totalEstHours` (總預估工時 `work_est`)、`totalActualHours` (任務滾算實報工時 `rollup_actual_work` / `actual_work`)
+    - `reportedWorkHours` (工時回報統計總工時 `hr`)、`reportedWorkDays` (工時回報統計總工天 `reportedWorkHours / 8.0`)
+    - `projectWorkTimeBreakdowns` (該成員在當前篩選條件下各專案的工時回報明細列表：含 `projectId`、`projNum`、`projectName`、`reportedHours`、`reportedDays`、`taskCount`)
+    - `completionRate` (個人任務完成率 `%`)
+    - `loadLevel` (負荷等級：依進行中+未開始任務數或剩餘工時判定 `OVERLOAD` / `HIGH` / `NORMAL` / `LOW`)
+
+### 3.4 自然語言 NoUI 篩選解析與使用者團隊權限預讀流程
+1. **當前使用者權限預讀 (`UserContext`)**：
+   - 讀取當前登入 `User` 的 `team_id/@keyed_name` 與 `value_score`。
+   - 若 `team_id.keyed_name` 為 `TPS`、`SUS`、`SHS` 或 `ICS`：
+     - 預設篩選條件自動設定 `team_id = user.team_id.keyed_name`。
+     - 若 `user.value_score` **不等於 `V9` 且不等於 `V10`**，則 `is_team_restricted = true`，強制鎖定只能查詢該執行團隊，禁止跨團隊查詢。
+2. **自然語言 NoUI 輸入解析 (`parseNaturalLanguageFilter`)**：
+   - 預設基準條件：`state = "Active"`, `project_type = "1.Standard,2.Professional"`（若使用者屬四大團隊則自動帶入 `team_id`）。
+   - 解析自然語言詞彙：
+     - **狀態**：輸入含「全部狀態/所有狀態/含結案」&rarr; `ALL`；含「已結案/結案/closed」&rarr; `closed`；含「暫停/pending」&rarr; `pending`；含「進行中/啟動/active」&rarr; `Active`。
+     - **專案類型**：輸入含「全部類型/所有類型」&rarr; `ALL`；或識別 `Standard/標準`、`Professional/專業`、`Upgrade/升級`、`Customize/客製`、`Product/產品`、`Technical/技術`、`Marketing/行銷`、`Training/訓練`、`Misc/其他`，未提及類型時預設保持 `1.Standard,2.Professional`。
+     - **執行團隊**：識別 `TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other/其他團隊`、`全部團隊`（若 `is_team_restricted == true`，則忽略跨團隊詞彙並維持鎖定自身團隊）。
+     - **服務中心**：識別 `台北`、`新竹`、`台中`、`台南`。
+     - **健康度燈號**：識別 `紅燈/嚴重延遲/危險/RED`、`黃燈/警示/注意/YELLOW`、`綠燈/正常/良好/GREEN`。
+     - **關鍵字**：將扣除上述結構化條件詞彙後的剩餘字詞（如專案編號 `2127`、客戶名稱、PM 姓名、專案名稱）作為 `keyword` 模糊搜尋。
 
 ---
 
@@ -569,13 +599,14 @@ classDiagram
 
 | RESTful 路徑 (`route`) | 對應 Action 別名 | 查詢參數 | 回應內容摘要 |
 | :--- | :--- | :--- | :--- |
-| `GET /api/v1/dashboard/team-summary` | `GET_TEAM_SUMMARY` | `state` (預設 `Active`, 支援 `ALL`/`closed`/`pending`), `project_type` (支援 9 項複選), `territory`, `keyword` | **首頁極速統計**：僅查詢 Project 主檔並依 `team_id/@keyed_name` 解析分組彙整各執行團隊專案數，統計結果完全聯動篩選條件，數十毫秒秒開首頁長條圖 |
-| `GET /api/v1/dashboard/summary` | `GET_PORTFOLIO_SUMMARY` | `state` (預設 `Active`), `project_type` (複選 OR), `territory`, `team_id`, `pm_id`, `health_status`, `keyword` | 全公司/多專案 KPI 彙總、紅黃綠燈 (`rag_status`) 統計、EVM 彙總、`team_performance`、`pm_performance`、含 `Ph 1~12` 與進度狀態之專案清單 |
+| `GET /api/v1/dashboard/user-context` | `GET_USER_CONTEXT` | 無（自動讀取 `inn.getUserID()`） | 回傳當前登入使用者之 `user_id`、`login_name`、`user_name`、`team_code` (`user.team_id.keyed_name`)、`value_score`、`default_team_filter`、`is_team_restricted` (是否限制跨團隊查詢) |
+| `GET /api/v1/dashboard/team-summary` | `GET_TEAM_SUMMARY` | `state` (預設 `Active`), `project_type` (預設 `1.Standard,2.Professional`), `territory`, `team_id`, `keyword` | **首頁極速統計**：套用使用者團隊權限控管後，僅查詢 Project 主檔並依 `team_id/@keyed_name` 分組彙整各執行團隊專案數，一併回傳 `user_context` |
+| `GET /api/v1/dashboard/summary` | `GET_PORTFOLIO_SUMMARY` | `state`, `project_type`, `territory`, `team_id`, `pm_id`, `health_status`, `keyword` | 套用使用者團隊權限控管後之多專案 KPI 彙總、紅黃綠燈 (`rag_status`)、EVM、`team_performance`、`pm_performance`、含 `id` (供左側 Item Icon `uiShowItem` 開啟) 與 `Ph 1~12` 之專案清單 |
 | `GET /api/v1/dashboard/team/{team_id}` | `GET_TEAM_ANALYSIS` | `team_id`, `state` | 指定執行團隊 (`team_id`) 之專案進度、RAG 燈號分佈、PM 績效與風險專案明細 |
 | `GET /api/v1/dashboard/pm/{pm_id}` | `GET_PM_ANALYSIS` | `pm_id`, `state` | 指定專案經理 (`owned_by_id`) 負責之所有專案完成率、時程偏差、EVM 與狀態統計 |
-| `GET /api/v1/dashboard/project/{proj_num}` | `GET_PROJECT_DETAIL` | `proj_num` (專案編號或 ID) | 單一專案深度分析：基本與客製屬性 (`cn_*`/`bcs_*`)、`Ph 1~12` 階段燈號、主階段 `WBS Element` 達成率與時程偏差天數、里程碑進度、該專案成員任務負荷統計 |
+| `GET /api/v1/dashboard/project/{proj_num}` | `GET_PROJECT_DETAIL` | `proj_num` (專案編號或 ID) | 單一專案深度分析：基本與客製屬性、`Ph 1~12` 階段燈號、主階段 `WBS Element` 達成率與時程偏差天數、該專案成員任務負荷與工時回報統計 |
 | `GET /api/v1/dashboard/wbs/{proj_num}` | `GET_WBS_ANALYSIS` | `proj_num` | 單一專案完整 `WBS Element` 遞迴樹狀結構 (`wbs_tree`)、各層級完成度、SPI/CPI、時程偏差與下轄任務狀態 |
-| `GET /api/v1/dashboard/assignees` | `GET_ASSIGNEE_WORKLOAD` | `proj_num` (選填), `team_id` (選填), `state` | 跨專案或單一專案之成員 (`Activity2.managed_by_id`) 任務負荷排行榜（扣除 `is_milestone == '1'` 里程碑任務忽略不計）：總任務、已完成、進行中、未開始、逾期數、要徑任務數、預估工時 (`work_est`)、實際工時 (`actual_work`)、完成率 (%) 與負荷等級 |
+| `GET /api/v1/dashboard/assignees` | `GET_ASSIGNEE_WORKLOAD` | `proj_num` (選填), `team_id` (選填), `state`, `project_type`, `territory`, `health_status`, `keyword` | 當前篩選條件下之成員 (`Activity2.managed_by_id` & `workingtime_record`) 任務負荷與**工時回報統計排行榜**：含總任務、各狀態任務數、預估工時、**工時回報總值 (`reported_work_hours` / `reported_work_days`)** 以及**該成員在各專案的工時回報明細 (`project_worktime_breakdowns`)** |
 | `GET /api/v1/health` | `HEALTH_CHECK` | 無 | 系統健康檢查與版本資訊 |
 
 ---
