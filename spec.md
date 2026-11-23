@@ -641,6 +641,8 @@ Aras Innovator 官方匯入工具 **`PackageImportExportUtilities`**（包含 `I
 `PMO_Progress_Analytics` ItemType 的目的為在 Aras Web Client 的左側目錄樹 (TOC) 中掛載進入點：
 - **分類位置**：`Portfolio`。
 - **檢視頁面**：`<start_page>../customer/pmo_static/index.html</start_page>`。
+- **CUI 外觀配置顯式關聯 (`ITPresentationConfiguration`)**：
+  在 Aras 12 SP9 CUI 機制中，若 ItemType 建立時未提供 `ITPresentationConfiguration` 關聯，Aras 核心事件會嘗試自動新增專屬之 `PresentationConfiguration`，此時常因系統預設範本或殘留孤立主鍵而引發 `PresentationConfiguration already exists. Violation of PRIMARY KEY constraint` 例外。本專案 AML 於建立時顯式關聯至目標資料庫既有之 `Global` Presentation Configuration，主動阻斷核心重複生成行為，確保 `action="add"` 匯入平順完成。
 - **權限配置**：
   - `Allowed Permission`：關聯至目標資料庫 `Default Access` Permission（於 `BWCS-CRM` 中之標準 GUID 為 `9122CD065CF04141B8EFE263FC80BEA4`）。
   - `Can Add`：關聯至 `Administrators` Identity（GUID: `2618D6F5A90949BAA7E920D1B04C7EE1`）。

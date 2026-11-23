@@ -138,7 +138,7 @@ Aras 預設會從安裝目錄下的 `Innovator\Client\customer\` 讀取客製化
 > **注意事項與常見問題排查**：
 > 1. **目錄結構要求**：Aras Package Import 工具內部採用嚴格的 ItemType 子目錄尋訪機制 (`Directory.GetDirectories`) 與 `build.xsl` 相依性排序規則。若將 XML 單檔平鋪在 `Import\` 根目錄或使用非標準 action，匯入工具將無法匹配任何項目。本專案腳本已自動依照 Aras 標準架構拆分子目錄 (`Method/`、`ItemType/`)。
 > 2. **Permission GUID 相依校驗**：目標資料庫 (`BWCS-CRM` 與 `BDM-Test`) 之 `Default Access` Permission GUID 均為 `9122CD065CF04141B8EFE263FC80BEA4`。若 Permission GUID 不匹配，`Import.exe` 會在 Thorough Mode 剝離該關聯，造成 Aras 核心 CUI `PresentationConfiguration` 在生成時引發 Primary Key 衝突例外。本專案 AML 已精準校準為該實體 GUID。
-> 3. **CUI 物件殘留與建立衝突排查**：若先前匯入因其他原因（如權限或路徑錯誤）中途 rollback，Aras 內部事件可能已先插入了部分 CUI 項目（如 `CommandBarSection`：`PMO_Progress_Analytics_TOC_Content`）。此時重新執行 `action="add"` 會因該 CUI 項目已存在而噴出主鍵衝突。目前已於測試資料庫 `BDM-Test` 徹底清除孤立殘留 CUI 並驗證成功建立；若在其他全新資料庫執行全新安裝，使用預設 `action="add"` 即可順暢完成。若資料庫中該 ItemType 已存在，則可指定參數 `.\build_aml_package.ps1 -Action edit` 進行更新。
+> 3. **CUI 外觀配置防衝突設計 (`ITPresentationConfiguration`)**：在 Aras 12 中，全新建立 ItemType 時若未顯式指派 CUI 外觀配置，Aras 核心事件會強制自動為其生成預設 PresentationConfiguration，若系統曾因中途 rollback 殘留孤立主鍵，將引發 `PresentationConfiguration already exists. Violation of PRIMARY KEY constraint`。本專案 AML 已在 Relationships 內顯式指定關聯至既有之 `Global` Presentation Configuration，並更新為獨立 GUID，徹底杜絕主鍵衝突。若目標資料庫該 ItemType 已存在，亦可隨時使用 `.\build_aml_package.ps1 -Action edit` 進行更新。
 
 > **提示**：若您日後修改了 `backend/PMO_ProjectAnalytics_API.cs`，只需再次執行以下指令即可重新打包最新 AML：
 > ```powershell
