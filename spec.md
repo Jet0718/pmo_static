@@ -150,14 +150,18 @@ flowchart TB
    - 優先取 `Project.cn_plan_compl`（計劃進度 %）。
    - 若 `cn_plan_compl` 未填或為 0，則依當前日期 (`AsOfDate`) 與 `date_start_sched` ~ `date_due_sched` 線性插值計算應有進度百分比。
    - **進度落差**：$$\text{ProgressGap} = \text{ExpectedProgress} - \text{ActualProgress}$$
-3. **健康度燈號 (`HealthStatus`：綠/黃/紅燈) 判定標準**：
+3. **健康度燈號 (`HealthStatus`：綠/黃/紅燈) 判定標準與任務狀態計算**：
+   - **工作任務狀態皆不計里程碑任務 (`is_milestone == '1'`)**：
+     - 專案工作任務狀態（總數 `total_tasks`、完成數 `completed_tasks`、進行中 `in_progress_tasks`、未開始 `not_started_tasks`、逾期項數 `overdue_tasks`、要徑數 `critical_tasks`）全面排除 `is_milestone = '1'` 的里程碑任務。里程碑僅單獨記錄於 `milestone_count` / `milestone_completed_count`。
+   - **專案延遲天數只記錄最大值（不累加）**：
+     - 專案延遲天數 (`delay_days`) 僅記錄該專案未完成逾期工作任務中延遲迄今最多的任務天數 $\max(\text{Today} - \text{SchedDue})$，不採用累加值，若無逾期任務則為 0 天。
    - **紅燈 (`RED` - 嚴重延遲)**（滿足任一條件）：
-     - 存在已逾期未完成之里程碑 (`is_milestone = 1`) 或要徑任務 (`is_critical = 1`)；
-     - 逾期任務佔比 $\frac{\text{OverdueTasks}}{\text{TotalTasks}} > 20\%$；
+     - 存在已逾期未完成之要徑任務 (`is_critical = 1`)；
+     - 逾期任務佔比 $\frac{\text{OverdueTasks}}{\text{TotalTasks}} > 20\%$（以非里程碑工作任務計算）；
      - 整體進度落差 $\text{ProgressGap} > 20\%$；
      - 或 EVM 進度績效 $\text{SPI} > 0$ 且 $\text{SPI} < 0.80$。
    - **黃燈 (`YELLOW` - 進度警示)**（未達紅燈，且滿足任一條件）：
-     - 逾期任務數 $\text{OverdueTasks} > 0$（佔比 $\le 20\%$）；
+     - 逾期工作任務數 $\text{OverdueTasks} > 0$（佔比 $\le 20\%$）或專案任務最大延遲天數 $> 0$；
      - 整體進度落差 $10\% \le \text{ProgressGap} \le 20\%$；
      - 3 日內有即將到期但尚未完成的要徑任務 (`0 <= days_remaining <= 3` 且 `is_critical = 1`)；
      - 或 EVM 進度績效 $0.80 \le \text{SPI} < 0.95$。

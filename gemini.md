@@ -7,7 +7,7 @@
 1. **自然語言 NoUI 智慧篩選與使用者團隊權限預讀控管 (`user.team_id.keyed_name` & `user.value_score`)**：
    - 完全以自然語言輸入框取代傳統下拉表單，預設保留 `project_type = 1.Standard, 2.Professional` 且 `state = Active`，並提供常用篩選條件提示標籤 (Prompt Chips)。
    - 自動預讀當前登入使用者之 `team_id/@keyed_name` 與 `value_score`：若所屬團隊為 `TPS`、`SUS`、`SHS` 或 `ICS`，自動加入 `project.team_id` 符合條件；若其 `value_score` 不等於 `V9` 且不等於 `V10`，則強制鎖定僅能查詢自身執行團隊。
-2. **專案整體完成率 (%)、EVM 指標 (`cn_spi` / `cn_cpi` / `cn_sv` / `cn_cv`)、健康度燈號 (綠/黃/紅燈) 與 Aras 原生專案開啟 (`uiShowItem` Item Icon)**
+2. **專案整體完成率 (%)、EVM 指標 (`cn_spi` / `cn_cpi` / `cn_sv` / `cn_cv`)、健康度燈號 (綠/黃/紅燈)、工作任務狀態 (不計里程碑) 與延遲天數 (只計最多任務天數不累加) 與 Aras 原生專案開啟 (`uiShowItem` Item Icon)**
 3. **各階段 (Ph 1~12 里程碑燈號與 `WBS Element` 主階段) 的進度達成率與時程偏差分析**
 4. **專案成員任務負荷統計與工時回報統計 (`workingtime_record` & `Activity2`)**：
    - 統計當前篩選條件下，各成員回報任務的工時統計總值，並在成員任務負荷統計中整併顯示使用者工時回報總值（附帶下鑽超連結，可開啟浮層深入檢視該員在各專案的回報總工時 `hr` 與總工天 `工時 / 8`）。

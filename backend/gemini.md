@@ -59,6 +59,11 @@
 ## 5. Activity2 任務指派人、里程碑扣除、工時回報聚合與 WBS 排序規範
 - **指派人取得 (`Activity2.managed_by_id` 優先)**：`GetActivitiesWithAssignments` 中，首要讀取 `managed_by_id`（及其 `keyed_name` 屬性或 `Identity` 反查）作為 `AssigneeId` / `AssigneeName`；僅當 `managed_by_id` 為空時，才參考 `Activity2 Assignment` 或回退至 `owned_by_id`，嚴禁覆蓋已存在之 `managed_by_id`。
 - **任務實報工時提取**：`Activity2.actual_work` 於 BDM 常為空值，實際滾算工時存於 `Activity2.rollup_actual_work`，因此讀取 `ActualWork` 時必須優先取 `rollup_actual_work`（若 `> 0`），否則才取 `actual_work`。
+- **工作任務狀態皆不計里程碑任務 (`is_milestone == '1'`)**：
+  - `ProjectHealthCalculator.ComputeProjectSummary` 統計專案工作任務狀態（`TotalTasks`、`CompletedTasks`、`InProgressTasks`、`NotStartedTasks`、`OverdueTasks`、`CriticalTaskCount`、`CriticalOverdueCount`）時，必須將 `act.IsMilestone == true` 的里程碑任務扣除忽略不計；里程碑任務僅單獨記錄於 `MilestoneCount` 與 `MilestoneCompletedCount`。
+  - WBS 樹狀階段統計 `RollupStageMetricsRecursive` 與成員負荷統計 `WorkloadAggregator.AggregateByAssignee` 亦同步扣除里程碑任務。
+- **專案延遲天數只記錄延遲最多的任務天數（非累加）**：
+  - 專案 `DelayDays` 嚴禁採用資料庫累加之 `cn_delay_days`，而必須動態遍歷該專案未完成且逾期之非里程碑工作任務，記錄延遲迄今最多的任務天數 $\max(\text{asOfDate} - \text{act.SchedDue})$；若無逾期任務則為 0。
 - **扣除里程碑任務 (`is_milestone == '1'`)**：`WorkloadAggregator.AggregateByAssignee` 統計成員負荷時，必須將 `act.IsMilestone == true` 的里程碑任務扣除忽略不計。
 - **專案成員工時回報統計 (`workingtime_record` 與母表 `WorkingTime` 工時卡)**：
   - 針對當前篩選條件下之專案 ID 集合 (`project IN (...)`)，查詢 `workingtime_record` ItemType（提取 `project`、`source_id`、`cn_act2`、`work_hour`、`work_date`、`owned_by_id`、`created_by_id`）。

@@ -239,6 +239,40 @@ public class Program
             "專案進度計算：Actual=68%, Expected=82%, Gap=14%");
         AssertTrue(summary.HealthStatus == "YELLOW" && summary.RagStatus == "Amber",
             "專案健康度綜合判定：Gap=14% 且 SPI=0.88、1筆一般逾期應為 YELLOW (Amber)");
+
+        // 測試 1-B：驗證「各專案任務狀態中的計劃皆不計 is_milestone 任務，延遲天數只記錄該專案任務中延遲迄今最多的任務天數而不是累加」
+        System.Collections.Generic.List<ActivityRecord> actsWithMilestoneAndMultipleDelays = new System.Collections.Generic.List<ActivityRecord>
+        {
+            new ActivityRecord { Id = "T1", ProjNum = 2127, Name = "工作任務1 (已完成)", State = "Complete", PercentCompl = 100, WorkEst = 20, IsMilestone = false },
+            new ActivityRecord { Id = "T2", ProjNum = 2127, Name = "工作任務2 (已完成)", State = "Complete", PercentCompl = 100, WorkEst = 20, IsMilestone = false },
+            new ActivityRecord { Id = "T3", ProjNum = 2127, Name = "工作任務3 (進行中逾期 5 天)", State = "Active", PercentCompl = 40, SchedDue = today.AddDays(-5), WorkEst = 30, IsMilestone = false },
+            new ActivityRecord { Id = "T4", ProjNum = 2127, Name = "工作任務4 (未開始逾期 12 天)", State = "Active", PercentCompl = 0, SchedDue = today.AddDays(-12), WorkEst = 40, IsMilestone = false },
+            new ActivityRecord { Id = "T5", ProjNum = 2127, Name = "工作任務5 (未到期進行中)", State = "Active", PercentCompl = 50, SchedDue = today.AddDays(15), WorkEst = 30, IsMilestone = false },
+            // 里程碑任務：即使已逾期或完成，皆不應計入工作任務狀態 (Total/Completed/Overdue)
+            new ActivityRecord { Id = "M1", ProjNum = 2127, Name = "里程碑節點1 (已完成)", State = "Complete", PercentCompl = 100, WorkEst = 0, IsMilestone = true },
+            new ActivityRecord { Id = "M2", ProjNum = 2127, Name = "里程碑節點2 (逾期 20 天)", State = "Active", PercentCompl = 0, SchedDue = today.AddDays(-20), WorkEst = 0, IsMilestone = true }
+        };
+
+        ProjectRecord projWithOldDelay = new ProjectRecord
+        {
+            Id = "PRJ002",
+            ProjNum = 2127,
+            Name = "延遲天數與里程碑測試專案",
+            State = "Active",
+            DelayDays = 999 // 模擬資料庫舊的累加值 999 天
+        };
+
+        ProjectSummaryDto summaryNew = calc.ComputeProjectSummary(projWithOldDelay, null, actsWithMilestoneAndMultipleDelays, today);
+
+        // 驗證 1：工作任務狀態總數與完成數皆扣除里程碑任務 (總數=5, 完成=2, 逾期=2，不計 M1 與 M2)
+        AssertTrue(summaryNew.TotalTasks == 5, "工作任務狀態：總數應扣除 is_milestone 任務 (5 項非里程碑任務)");
+        AssertTrue(summaryNew.CompletedTasks == 2, "工作任務狀態：完成數應扣除 is_milestone 任務 (2 項完成)");
+        AssertTrue(summaryNew.OverdueTasks == 2, "工作任務狀態：逾期數應扣除 is_milestone 任務 (2 項逾期，不計 M2)");
+        AssertTrue(summaryNew.MilestoneCount == 2 && summaryNew.MilestoneCompletedCount == 1,
+            "里程碑統計：單獨正確記錄里程碑總數 (2) 與完成數 (1)");
+
+        // 驗證 2：延遲天數只記錄延遲最多的任務天數 (T4 延遲 12 天 > T3 延遲 5 天)，而非累加 17 天，亦非資料庫舊值 999 天
+        AssertTrue(summaryNew.DelayDays == 12, "專案延遲天數：應為逾期任務延遲迄今之最大天數 (12 天)，而非累加值 (17) 或舊欄位 (999)");
     }
 
     /// <summary>

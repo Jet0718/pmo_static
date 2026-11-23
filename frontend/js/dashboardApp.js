@@ -405,7 +405,7 @@
         '<div class="kpi-card" style="border-left-color:#2563eb;">' +
           '<span class="kpi-label">整體實際完成率 / 計劃進度</span>' +
           '<div class="kpi-value">' + Number(p.actual_progress).toFixed(1) + '% <small style="font-size:14px;color:#64748b;">/ ' + Number(p.expected_progress).toFixed(1) + '%</small></div>' +
-          '<span class="kpi-sub">進度落差: ' + Number(p.progress_gap).toFixed(1) + '% | 延遲天數 (cn_delay_days): ' + p.delay_days + ' 天</span>' +
+          '<span class="kpi-sub">進度落差: ' + Number(p.progress_gap).toFixed(1) + '% | 延遲天數: ' + p.delay_days + ' 天</span>' +
         '</div>' +
         '<div class="kpi-card" style="border-left-color:#10b981;">' +
           '<span class="kpi-label">EVM 績效指標 (cn_spi / cn_cpi)</span>' +

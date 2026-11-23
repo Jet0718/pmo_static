@@ -35,52 +35,27 @@ function runE2ETests() {
 
   const indexPath = path.join(FRONTEND_DIR, "index.html");
 
-  // 1. 驗證首頁初始渲染 (極速長條圖、預設狀態 Active、9大專案類型複選、團隊選單)
+  // 1. 驗證首頁初始渲染 (自然語言 NoUI 搜尋列、提示 Chips、使用者權限徽章容器)
   const domHtml = runChromeDumpDom(indexPath);
   console.log("[PASS] 1. Chrome Headless 成功載入頁面並完成首頁極速渲染");
 
-  // 驗證需求 3：專案狀態預設 Active
-  if (!domHtml.includes('<option value="Active" selected="">進行中 (Active)</option>') &&
-      !domHtml.includes('value="Active" selected')) {
-    throw new Error("預設專案狀態未選中 Active");
+  // 驗證自然語言 NoUI 智慧篩選列
+  if (!domHtml.includes('id="nl-filter-input"') || !domHtml.includes('id="btn-apply-nl-filter"')) {
+    throw new Error("首頁未正確渲染自然語言 NoUI 智慧篩選輸入框或套用按鈕");
   }
-  console.log(" [PASS] 1.1 專案狀態 (state) 預設為 Active");
+  console.log(" [PASS] 1.1 自然語言 NoUI 智慧搜尋框 (#nl-filter-input) 與查詢按鈕存在");
 
-  // 驗證需求 2：專案類型 9 項複選下拉選單
-  const expectedTypes = [
-    "1.Standard", "2.Professional", "3.Upgrade", "4.Customize",
-    "5.Product", "6.Technical", "7.Marketing", "8.EmployeeTraining", "F.Misc"
-  ];
-  for (const t of expectedTypes) {
-    if (!domHtml.includes(`class="js-filter-type" value="${t}"`)) {
-      throw new Error(`專案類型 9 大類遺漏項目: ${t}`);
-    }
+  // 驗證常用條件提示標籤與當前篩選條件容器
+  if (!domHtml.includes('id="noui-prompt-chips-container"') || !domHtml.includes('id="noui-active-filters-summary"')) {
+    throw new Error("首頁未包含提示標籤容器或生效條件膠囊容器");
   }
-  if (!domHtml.includes('id="type-dropdown-trigger"') || !domHtml.includes('id="type-dropdown-panel"')) {
-    throw new Error("專案類型未包含下拉式複選觸發鈕與面板容器");
-  }
-  console.log(" [PASS] 1.2 專案類型 (cn_project_type) 完整提供 9 大類型下拉式複選，且預設勾選 1.Standard 與 2.Professional");
+  console.log(" [PASS] 1.2 常用條件提示標籤容器與生效條件摘要容器渲染正常");
 
-  // 驗證需求 4：團隊選單純淨包含 TPS, ICS, PMO, SUS, SHS, Other (無冗餘中文)
-  const requiredTeams = ["TPS", "ICS", "PMO", "SUS", "SHS", "Other"];
-  for (const t of requiredTeams) {
-    if (!domHtml.includes(`<option value="${t}">${t}</option>`)) {
-      throw new Error(`執行團隊選單純代碼選項遺漏或不符: ${t}`);
-    }
+  // 驗證主視圖容器存在
+  if (!domHtml.includes('id="pmo-view-container"')) {
+    throw new Error("首頁未包含主視圖容器");
   }
-  // 嚴格驗證不得包含任何冗餘中文後綴 (如 顧問團隊、專案管理處)
-  if (domHtml.includes("TPS 顧問團隊") || domHtml.includes("ICS 顧問團隊") || domHtml.includes("PMO 專案管理處")) {
-    throw new Error("執行團隊選單仍殘留不正確的中文XX團隊後綴！");
-  }
-  console.log(" [PASS] 1.3 執行團隊選單純淨包含 TPS, ICS, PMO, SUS, SHS, Other (已徹底移除中文XX團隊後綴)");
-
-  // 驗證需求 1：首頁長條圖渲染 (動態狀態標題)
-  if (!domHtml.includes("各執行團隊進行中 (Active) 專案數量統計") ||
-      !domHtml.includes('data-team-id="TPS"') ||
-      !domHtml.includes('data-team-id="ICS"')) {
-    throw new Error("首頁未正確渲染各執行團隊進行中專案數量長條圖");
-  }
-  console.log(" [PASS] 1.4 首頁極速渲染各執行團隊專案數長條圖與動態狀態標題");
+  console.log(" [PASS] 1.3 首頁主視圖容器 (pmo-view-container) 渲染正常");
 
   // 2. 驗證點擊團隊色塊展開明細與取消下鑽操作欄位 (需求 1 & 需求 5)
   const testHtmlPath = path.join(FRONTEND_DIR, "e2e_runner.html");
@@ -115,17 +90,26 @@ function runE2ETests() {
   if (!interactiveDom.includes("次世代 BDM 智慧製造整合專案") || !interactiveDom.includes("陳建宏") || !interactiveDom.includes("(1 專案)")) {
     throw new Error("點擊 TPS 色塊後未正確向下展開 TPS 專案明細或 PM 績效統計");
   }
-  console.log(" [PASS] 1.5 點擊團隊長條色塊成功向下展開該團隊詳細明細與各專案經理 (PM) 績效統計");
+  console.log(" [PASS] 1.4 點擊團隊長條色塊成功向下展開該團隊詳細明細與各專案經理 (PM) 績效統計");
 
-  // 驗證需求 5：多專案總覽表取消下鑽操作欄位，併在第一欄專案編號超連結
+  // 驗證需求：多專案總覽表包含「工作任務狀態與延遲天數」表頭與任務/延遲指標
+  if (!interactiveDom.includes("<th>工作任務狀態與延遲天數</th>") ||
+      !interactiveDom.includes("完成 13 / 總數 18") ||
+      !interactiveDom.includes("延遲: 0 天")) {
+    throw new Error("多專案總覽表未正確呈現工作任務狀態與延遲天數！");
+  }
+  console.log(" [PASS] 1.5 多專案總覽表正確呈現「工作任務狀態與延遲天數」欄位與任務完成度/最大延遲天數");
+
+  // 驗證需求 5：多專案總覽表取消下鑽操作欄位，併在第一欄專案編號超連結與左側 Aras Item Icon
   if (interactiveDom.includes("<th>下鑽操作</th>") || interactiveDom.includes("階段與成員分析 &rarr;")) {
     throw new Error("表格中仍殘留下鑽操作欄位！");
   }
   if (!interactiveDom.includes('class="pmo-proj-link js-drill-project"') ||
-      !interactiveDom.includes('data-proj-num="2127"')) {
-    throw new Error("第一欄專案編號未正確帶有下鑽超連結 class 與 data-proj-num");
+      !interactiveDom.includes('data-proj-num="2127"') ||
+      !interactiveDom.includes('js-open-aras-item')) {
+    throw new Error("第一欄專案編號未正確帶有下鑽超連結 class、data-proj-num 或 Aras Item Icon");
   }
-  console.log(" [PASS] 1.6 多專案總覽表取消獨立下鑽操作欄位，並將下鑽連結完美整併於第一欄專案編號中");
+  console.log(" [PASS] 1.6 多專案總覽表取消獨立下鑽操作欄位，整併下鑽連結與 Aras Item Icon");
 
   // 3. 驗證單一專案下鑽視圖：WBS 階段名稱升冪排序與成員任務負荷 (圖1 & 圖2)
   const detailRunnerPath = path.join(FRONTEND_DIR, "e2e_detail_runner.html");

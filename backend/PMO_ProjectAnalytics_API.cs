@@ -699,7 +699,7 @@ public class ProjectHealthCalculator : IProjectHealthCalculator
         dto.BcsStatusLabel = proj.BcsStatusLabel ?? "";
         dto.BcsStatusColor = proj.BcsStatusColor ?? "";
         dto.ComplCategory = proj.ComplCategory ?? "";
-        dto.DelayDays = proj.DelayDays;
+        dto.DelayDays = 0; // 延遲天數稍後統一依據未完成逾期任務之最大延遲天數計算，不採用資料庫累加之 cn_delay_days
         dto.PendingDays = proj.PendingDays;
         dto.ExpMandays = proj.ExpMandays;
         dto.RemainderHours = proj.RemainderHours;
@@ -713,6 +713,8 @@ public class ProjectHealthCalculator : IProjectHealthCalculator
         dto.ActFinish = FormatDate(proj.ActFinish);
 
         // 2. 統計 Activity2 各狀態數量與工時加權進度
+        // 規則：各專案任務狀態中的計劃皆不計 is_milestone 的任務；
+        // 延遲天數亦只記錄該專案非里程碑任務中延遲迄今最多的任務天數，不使用累加值。
         int totalTasks = 0;
         int completedTasks = 0;
         int inProgressTasks = 0;
@@ -723,7 +725,7 @@ public class ProjectHealthCalculator : IProjectHealthCalculator
         int upcomingCritical = 0;
         int milestoneCount = 0;
         int milestoneCompleted = 0;
-        int maxTaskDelayDays = proj.DelayDays;
+        int maxTaskDelayDays = 0;
 
         double weightedComplSum = 0.0;
         double weightSum = 0.0;
@@ -740,15 +742,18 @@ public class ProjectHealthCalculator : IProjectHealthCalculator
                 ActivityRecord act = activities[i];
                 if (act == null) continue;
 
-                totalTasks++;
                 bool isDone = IsActivityCompleted(act);
                 bool isOverdue = !isDone && IsActivityOverdue(act, asOfDate);
 
+                // 里程碑任務單獨計入里程碑統計，計劃之工作任務狀態不計 is_milestone 任務
                 if (act.IsMilestone)
                 {
                     milestoneCount++;
                     if (isDone) milestoneCompleted++;
+                    continue;
                 }
+
+                totalTasks++;
 
                 if (act.IsCritical)
                 {
@@ -778,7 +783,7 @@ public class ProjectHealthCalculator : IProjectHealthCalculator
                         if (delay > maxTaskDelayDays) maxTaskDelayDays = delay;
                     }
 
-                    if (act.IsCritical || act.IsMilestone)
+                    if (act.IsCritical)
                     {
                         criticalOverdue++;
                     }
@@ -829,10 +834,8 @@ public class ProjectHealthCalculator : IProjectHealthCalculator
         dto.CriticalOverdueCount = criticalOverdue;
         dto.MilestoneCount = milestoneCount;
         dto.MilestoneCompletedCount = milestoneCompleted;
-        if (maxTaskDelayDays > dto.DelayDays)
-        {
-            dto.DelayDays = maxTaskDelayDays;
-        }
+        // 延遲天數只記錄該專案任務中延遲迄今最多的任務天數，而不是累加
+        dto.DelayDays = maxTaskDelayDays;
 
         // 3. 決定專案整體實際完成率 ActualProgress (%)
         double actualProgress = 0.0;
@@ -1432,13 +1435,15 @@ public class WbsStageAnalyzer : IWbsStageAnalyzer
         int overdue = 0;
         int critOverdue = 0;
 
-        // 1. 直接掛載於此 WBS 的任務
+        // 1. 直接掛載於此 WBS 的任務 (扣除 is_milestone 任務)
         if (actsByWbs.ContainsKey(node.WbsId))
         {
             System.Collections.Generic.List<ActivityRecord> directActs = actsByWbs[node.WbsId];
             for (int i = 0; i < directActs.Count; i++)
             {
                 ActivityRecord act = directActs[i];
+                if (act == null || act.IsMilestone) continue;
+
                 total++;
                 bool isDone = ProjectHealthCalculator.IsActivityCompleted(act);
                 bool isOvd = !isDone && ProjectHealthCalculator.IsActivityOverdue(act, asOfDate);
@@ -1452,7 +1457,7 @@ public class WbsStageAnalyzer : IWbsStageAnalyzer
                     if (isOvd)
                     {
                         overdue++;
-                        if (act.IsCritical || act.IsMilestone) critOverdue++;
+                        if (act.IsCritical) critOverdue++;
                     }
                     if (act.PercentCompl > 0 || ProjectHealthCalculator.IsStatusInProgress(act))
                     {
