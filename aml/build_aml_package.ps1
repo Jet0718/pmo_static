@@ -69,7 +69,7 @@ $itemTypeAml = @"
     <use_src_access>0</use_src_access>
     <Relationships>
       <!-- 顯式指定關聯至既有之 Global Presentation Configuration，避免 Aras 核心自動生成 CUI 引發主鍵衝突 -->
-      <Item type="ITPresentationConfiguration" action="$Action">
+      <Item type="ITPresentationConfiguration" id="E871251F1A47436D8FA3491DCC550351" action="$Action">
         <client>js</client>
         <related_id keyed_name="Global" type="PresentationConfiguration">
           <Item type="PresentationConfiguration" action="get" select="id">
@@ -79,25 +79,25 @@ $itemTypeAml = @"
         <sort_order>128</sort_order>
       </Item>
       <!-- TOC Access：掛載於 Portfolio 分類下供 World 與全員檢視 -->
-      <Item type="TOC Access" action="$Action">
+      <Item type="TOC Access" id="43E51019F1654148957E0391A9DC04EF" action="$Action">
         <category>Portfolio</category>
         <related_id keyed_name="World" type="Identity">A73B655731924CD0B027E4F4D5FCC0A9</related_id>
         <sort_order>128</sort_order>
       </Item>
       <!-- TOC View：點擊後直接於主工作區載入全域多專案進度統計儀表板 HTML5 -->
-      <Item type="TOC View" action="$Action">
+      <Item type="TOC View" id="270971C4611F47FB8F9F5160AD51AFEF" action="$Action">
         <related_id keyed_name="World" type="Identity">A73B655731924CD0B027E4F4D5FCC0A9</related_id>
         <sort_order>128</sort_order>
         <start_page>../customer/pmo_static/index.html</start_page>
       </Item>
       <!-- Allowed Permission：標準預設存取權限 (BWCS-CRM 實體 GUID: 9122CD065CF04141B8EFE263FC80BEA4) -->
-      <Item type="Allowed Permission" action="$Action">
+      <Item type="Allowed Permission" id="4219039360C941C69750ACC22EFA2410" action="$Action">
         <is_default>1</is_default>
         <related_id keyed_name="Default Access" type="Permission">9122CD065CF04141B8EFE263FC80BEA4</related_id>
         <sort_order>128</sort_order>
       </Item>
       <!-- Can Add：系統管理員具備新增權限 -->
-      <Item type="Can Add" action="$Action">
+      <Item type="Can Add" id="A99AFE0CB9874A638D92BE07C932F530" action="$Action">
         <can_add>1</can_add>
         <related_id keyed_name="Administrators" type="Identity">2618D6F5A90949BAA7E920D1B04C7EE1</related_id>
         <sort_order>128</sort_order>
