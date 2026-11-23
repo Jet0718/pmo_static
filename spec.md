@@ -153,8 +153,11 @@ flowchart TB
 3. **健康度燈號 (`HealthStatus`：綠/黃/紅燈) 判定標準與任務狀態計算**：
    - **工作任務狀態皆不計里程碑任務 (`is_milestone == '1'`)**：
      - 專案工作任務狀態（總數 `total_tasks`、完成數 `completed_tasks`、進行中 `in_progress_tasks`、未開始 `not_started_tasks`、逾期項數 `overdue_tasks`、要徑數 `critical_tasks`）全面排除 `is_milestone = '1'` 的里程碑任務。里程碑僅單獨記錄於 `milestone_count` / `milestone_completed_count`。
-   - **專案延遲天數只記錄最大值（不累加）**：
-     - 專案延遲天數 (`delay_days`) 僅記錄該專案未完成逾期工作任務中延遲迄今最多的任務天數 $\max(\text{Today} - \text{SchedDue})$，不採用累加值，若無逾期任務則為 0 天。
+   - **專案延遲天數以工作日計算（比照 `cn_Project_ScheduleUpdated` 規則）且只記錄最大值（不累加）**：
+     - **工作日計算規則**：延遲天數嚴格以「工作日 (Working Days)」計算，而非日曆天。演算法比照 Aras 原生伺服器方法 `cn_Project_ScheduleUpdated`，透過 `[innovator].[BUSINESS_CALENDAR]` 排除休假日與週末：
+       $$\text{DiffWorkdays}(D_1, D_2) = \text{DATEDIFF}(DAY, D_1, D_2) - \text{Count}(\text{BUSINESS\_CALENDAR.day\_date} \in [D_1, D_2] \land \text{DAY\_NUMBER} < 0)$$
+     - **扣除暫停天數**：專案延遲天數為該專案未完成非里程碑工作任務中工作日最大延遲天數扣除暫停天數：$$\text{DelayDays} = \max(\max_{act}(\text{DiffWorkdays}(act.\text{SchedDue}, \text{Today})) - \text{cn\_pending\_days}, 0)$$
+     - **實例驗證**：以 BDM-CRM 系統之 `[2357] 芯北PLM系统项目` 為標準，其未完成任務計劃結束日為 `2026/09/09`，基準日為 `2026/11/23`，經扣除 26 天休假日後，延遲天數精準為 **49 天**（非日曆天 75 天）。若無逾期任務則為 0 天。
    - **紅燈 (`RED` - 嚴重延遲)**（滿足任一條件）：
      - 存在已逾期未完成之要徑任務 (`is_critical = 1`)；
      - 逾期任務佔比 $\frac{\text{OverdueTasks}}{\text{TotalTasks}} > 20\%$（以非里程碑工作任務計算）；

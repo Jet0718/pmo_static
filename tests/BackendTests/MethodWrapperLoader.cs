@@ -15,7 +15,8 @@ try
 {
     // 建立資料存取層與各領域分析服務實例 (符合依賴反轉原則 DIP)
     IProjectRepository repository = new ArasProjectRepository(inn);
-    IProjectHealthCalculator healthCalculator = new ProjectHealthCalculator();
+    IBusinessCalendarService calendarService = new ArasBusinessCalendarService(inn);
+    IProjectHealthCalculator healthCalculator = new ProjectHealthCalculator(calendarService);
     IWbsStageAnalyzer stageAnalyzer = new WbsStageAnalyzer(healthCalculator);
     IWorkloadAggregator workloadAggregator = new WorkloadAggregator();
 
@@ -586,6 +587,15 @@ public class AssigneeWorkloadDto
 // ============================================================================
 
 /// <summary>
+/// 企業行事曆與工作日計算器介面 (遵循 cn_Project_ScheduleUpdated 之商業日曆規則)
+/// </summary>
+public interface IBusinessCalendarService
+{
+    int GetDiffDay(string date1, string date2);
+    int GetDiffDay(System.DateTime date1, System.DateTime date2);
+}
+
+/// <summary>
 /// 專案資料存取儲存庫介面
 /// </summary>
 public interface IProjectRepository
@@ -663,10 +673,176 @@ public interface IWorkloadAggregator
 // ============================================================================
 
 /// <summary>
+/// 企業行事曆與工作日計算服務 (完全遵循 Aras 原生 Method cn_Project_ScheduleUpdated 之商業日曆規則)
+/// SQL: select ((DATEDIFF(DAY,'{0}','{1}')) - (SELECT count(*) FROM [innovator].[BUSINESS_CALENDAR] where (day_date>='{0}' and day_date<='{1}') and DAY_NUMBER<0))
+/// </summary>
+public class ArasBusinessCalendarService : IBusinessCalendarService
+{
+    private readonly Innovator _inn;
+    private System.Collections.Generic.HashSet<string> _nonWorkingDaysCache;
+    private bool _cacheLoaded = false;
+
+    public ArasBusinessCalendarService(Innovator inn)
+    {
+        this._inn = inn;
+    }
+
+    public ArasBusinessCalendarService(System.Collections.Generic.IEnumerable<string> nonWorkingDays)
+    {
+        this._inn = null;
+        this._nonWorkingDaysCache = new System.Collections.Generic.HashSet<string>();
+        if (nonWorkingDays != null)
+        {
+            foreach (string d in nonWorkingDays)
+            {
+                if (!string.IsNullOrEmpty(d)) this._nonWorkingDaysCache.Add(d.Trim());
+            }
+        }
+        this._cacheLoaded = true;
+    }
+
+    private void EnsureCalendarLoaded()
+    {
+        if (this._cacheLoaded) return;
+        this._nonWorkingDaysCache = new System.Collections.Generic.HashSet<string>();
+        if (this._inn != null)
+        {
+            try
+            {
+                Item res = this._inn.applySQL("SELECT convert(varchar(10), day_date, 120) d FROM [innovator].[BUSINESS_CALENDAR] WHERE DAY_NUMBER < 0");
+                if (res != null && !res.isError())
+                {
+                    int cnt = res.getItemCount();
+                    for (int i = 0; i < cnt; i++)
+                    {
+                        Item r = res.getItemByIndex(i);
+                        string dt = r.getProperty("d", "");
+                        if (!string.IsNullOrEmpty(dt))
+                        {
+                            this._nonWorkingDaysCache.Add(dt.Trim());
+                        }
+                    }
+                }
+            }
+            catch {}
+        }
+        this._cacheLoaded = true;
+    }
+
+    public int GetDiffDay(System.DateTime date1, System.DateTime date2)
+    {
+        return GetDiffDay(date1.ToString("yyyy-MM-dd"), date2.ToString("yyyy-MM-dd"));
+    }
+
+    public int GetDiffDay(string date1, string date2)
+    {
+        if (string.IsNullOrEmpty(date1) || string.IsNullOrEmpty(date2) || date1 == date2)
+            return 0;
+
+        System.DateTime d1;
+        System.DateTime d2;
+        if (!System.DateTime.TryParse(date1, out d1) || !System.DateTime.TryParse(date2, out d2))
+        {
+            return 0;
+        }
+
+        string s1 = d1.ToString("yyyy-MM-dd");
+        string s2 = d2.ToString("yyyy-MM-dd");
+        if (s1 == s2) return 0;
+
+        if (d1 > d2)
+        {
+            return -GetDiffDay(s2, s1);
+        }
+
+        EnsureCalendarLoaded();
+
+        if (this._nonWorkingDaysCache != null && this._nonWorkingDaysCache.Count > 0)
+        {
+            int totalCalDays = (int)(d2.Date - d1.Date).TotalDays;
+            int nonWorkingCount = 0;
+            System.DateTime cur = d1.Date;
+            while (cur <= d2.Date)
+            {
+                if (this._nonWorkingDaysCache.Contains(cur.ToString("yyyy-MM-dd")))
+                {
+                    nonWorkingCount++;
+                }
+                cur = cur.AddDays(1);
+            }
+            int diff = totalCalDays - nonWorkingCount;
+            return diff > 0 ? diff : 0;
+        }
+
+        if (this._inn != null)
+        {
+            try
+            {
+                Item resItem = this._inn.applySQL(string.Format(
+                    "select ((DATEDIFF(DAY,'{0}','{1}')) - (SELECT count(*) FROM [innovator].[BUSINESS_CALENDAR] where (day_date>='{0}' and day_date<='{1}') and DAY_NUMBER<0))",
+                    s1, s2
+                ));
+                if (resItem != null && !resItem.isError() && !string.IsNullOrEmpty(resItem.getResult()))
+                {
+                    int res = int.Parse(resItem.getResult());
+                    if (res < 0)
+                        res = -GetDiffDay(s2, s1);
+                    return res > 0 ? res : 0;
+                }
+            }
+            catch {}
+        }
+
+        // 離線回退運算：排除週末週六週日
+        int fallbackWorkdays = 0;
+        System.DateTime step = d1.Date.AddDays(1);
+        while (step <= d2.Date)
+        {
+            if (step.DayOfWeek != System.DayOfWeek.Saturday && step.DayOfWeek != System.DayOfWeek.Sunday)
+            {
+                fallbackWorkdays++;
+            }
+            step = step.AddDays(1);
+        }
+        return fallbackWorkdays;
+    }
+}
+
+/// <summary>
 /// 專案健康度、整體完成率、EVM 與 Ph 1~12 燈號計算引擎
 /// </summary>
 public class ProjectHealthCalculator : IProjectHealthCalculator
 {
+    private readonly IBusinessCalendarService _calendarService;
+
+    public ProjectHealthCalculator() : this(null)
+    {
+    }
+
+    public ProjectHealthCalculator(IBusinessCalendarService calendarService)
+    {
+        this._calendarService = calendarService;
+    }
+
+    private int GetTaskDiffWorkdays(System.DateTime schedDue, System.DateTime asOfDate)
+    {
+        if (this._calendarService != null)
+        {
+            return this._calendarService.GetDiffDay(schedDue, asOfDate);
+        }
+        if (schedDue.Date >= asOfDate.Date) return 0;
+        int workdays = 0;
+        System.DateTime cur = schedDue.Date.AddDays(1);
+        while (cur <= asOfDate.Date)
+        {
+            if (cur.DayOfWeek != System.DayOfWeek.Saturday && cur.DayOfWeek != System.DayOfWeek.Sunday)
+            {
+                workdays++;
+            }
+            cur = cur.AddDays(1);
+        }
+        return workdays;
+    }
     /// <summary>
     /// 計算單一專案之完整進度指標、任務狀態分佈與健康度燈號
     /// </summary>
@@ -783,7 +959,7 @@ public class ProjectHealthCalculator : IProjectHealthCalculator
 
                     if (act.SchedDue.HasValue)
                     {
-                        int delay = (int)(asOfDate.Date - act.SchedDue.Value.Date).TotalDays;
+                        int delay = this.GetTaskDiffWorkdays(act.SchedDue.Value.Date, asOfDate.Date);
                         if (delay > maxTaskDelayDays) maxTaskDelayDays = delay;
                     }
 
@@ -838,8 +1014,10 @@ public class ProjectHealthCalculator : IProjectHealthCalculator
         dto.CriticalOverdueCount = criticalOverdue;
         dto.MilestoneCount = milestoneCount;
         dto.MilestoneCompletedCount = milestoneCompleted;
-        // 延遲天數只記錄該專案任務中延遲迄今最多的任務天數，而不是累加
-        dto.DelayDays = maxTaskDelayDays;
+        // 延遲天數以工作日計算（比照 cn_Project_ScheduleUpdated 演算法），只記錄該專案任務中工作日延遲最多天數，並扣除暫停天數 (PendingDays)
+        int netDelayDays = maxTaskDelayDays - proj.PendingDays;
+        if (netDelayDays < 0) netDelayDays = 0;
+        dto.DelayDays = netDelayDays;
 
         // 3. 決定專案整體實際完成率 ActualProgress (%)
         double actualProgress = 0.0;

@@ -16,7 +16,7 @@
      - 若符合上述四個執行團隊，且 `user.value_score` 不等於 `V9` 或 `V10`，系統會自動鎖定並限制查詢其他執行團隊。
 2. **全域多專案健康度總覽、極速概覽與左側 Aras Item Icon 開啟專案畫面 (`/api/v1/dashboard/summary` & `/api/v1/dashboard/team-summary`)**
    - **工作任務狀態不計里程碑**：專案清單之工作任務狀態（完成數/總數、逾期數）皆全面扣除 `is_milestone = '1'` 的里程碑任務，純粹統計實際計劃之工作任務。
-   - **任務延遲天數只取最大值（不累加）**：專案清單之「延遲: X 天」只記錄該專案工作任務中延遲迄今最多的任務天數 $\max(\text{Today} - \text{SchedDue})$，不採用累加值。
+   - **任務延遲天數以工作日計算（比照 `cn_Project_ScheduleUpdated`，非日曆天）且只取最大值（不累加）**：專案清單之「延遲: X 天」比照 Aras 原生伺服器方法 `cn_Project_ScheduleUpdated` 透過 `BUSINESS_CALENDAR` 排除休假日計算工作日延遲天數並扣除暫停天數，以 `[2357] 芯北PLM系统项目` 為例（計劃結束日 2026/9/9，今日 2026/11/23），延遲天數精準呈現為 49 天（而非日曆天 75 天）。
    - **首頁極速加載**：首頁載入時優先呼叫極速輕量端點 `/api/v1/dashboard/team-summary`，僅檢索 Project 主檔並統計「各執行團隊 (`team_id`) 專案數量長條圖」，統計結果完全聯動自然語言篩選條件與使用者團隊權限。
    - **統計圖色塊互動展開**：點擊長條圖中之團隊色塊（`TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`）時，向下展開該團隊之健康度燈號分佈、EVM 與多專案進度明細列表。
    - **左側 Item Icon 開啟 Aras 專案表單**：在專案清單左側增加一個專案 Item Icon 按鈕，點擊可呼叫 `top.aras.uiShowItem("Project", projectId)` 在 Aras Innovator 系統中直接開啟該專案 Item 畫面；點擊右側專案編號則切換至該專案之階段達成率與成員負荷分析。

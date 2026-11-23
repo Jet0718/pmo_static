@@ -271,8 +271,62 @@ public class Program
         AssertTrue(summaryNew.MilestoneCount == 2 && summaryNew.MilestoneCompletedCount == 1,
             "里程碑統計：單獨正確記錄里程碑總數 (2) 與完成數 (1)");
 
-        // 驗證 2：延遲天數只記錄延遲最多的任務天數 (T4 延遲 12 天 > T3 延遲 5 天)，而非累加 17 天，亦非資料庫舊值 999 天
-        AssertTrue(summaryNew.DelayDays == 12, "專案延遲天數：應為逾期任務延遲迄今之最大天數 (12 天)，而非累加值 (17) 或舊欄位 (999)");
+        // 驗證 2：延遲天數只記錄延遲最多的任務天數 (以工作日計算)，而非累加值，亦非資料庫舊值 999 天
+        AssertTrue(summaryNew.DelayDays == 8, "專案延遲天數：以工作日計算應為逾期任務最大延遲工作天數 (8 工作天，扣除週末)，而非累加值或舊欄位 (999)");
+
+        // 測試 1-C：驗證「延遲天數請以工作日為計算,而不是算日曆天, 以BDM-CRM系統的 [2357] 芯北PLM系统项目為驗證對象, 其延遲任務有一項, 其計劃結束日為2026/9/9 , 迄今延遲應該是49天, 而不是75天, 計算的方式應該如同method: cn_Project_ScheduleUpdated 的作法相同」
+        System.DateTime baseDate2357 = new System.DateTime(2026, 11, 23); // 2026/11/23
+        System.DateTime schedDue2357 = new System.DateTime(2026, 9, 9);   // 2026/9/9
+
+        // 模擬 BDM-CRM [innovator].[BUSINESS_CALENDAR] 中 2026/09/09 至 2026/11/23 期間 DAY_NUMBER < 0 的 26 天休假日 (含週末與中秋國慶連假)
+        System.Collections.Generic.List<string> bdmHolidays = new System.Collections.Generic.List<string>
+        {
+            "2026-09-12", "2026-09-13", "2026-09-19", "2026-09-20", "2026-09-25", "2026-09-26", "2026-09-27",
+            "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-10", "2026-10-11",
+            "2026-10-17", "2026-10-18", "2026-10-24", "2026-10-25", "2026-10-31", "2026-11-01", "2026-11-07",
+            "2026-11-08", "2026-11-14", "2026-11-15", "2026-11-21", "2026-11-22"
+        };
+        IBusinessCalendarService calendarService2357 = new ArasBusinessCalendarService(bdmHolidays);
+        ProjectHealthCalculator calcWithCalendar = new ProjectHealthCalculator(calendarService2357);
+
+        ProjectRecord proj2357 = new ProjectRecord
+        {
+            Id = "PRJ_2357",
+            ProjNum = 2357,
+            Name = "芯北PLM系统项目",
+            State = "Active",
+            PendingDays = 0
+        };
+
+        System.Collections.Generic.List<ActivityRecord> acts2357 = new System.Collections.Generic.List<ActivityRecord>
+        {
+            new ActivityRecord
+            {
+                Id = "ACT_5030",
+                ProjNum = 2357,
+                Name = "5030 上線技轉培訓",
+                State = "Active",
+                PercentCompl = 0,
+                SchedDue = schedDue2357,
+                IsMilestone = false
+            },
+            new ActivityRecord
+            {
+                Id = "ACT_6010",
+                ProjNum = 2357,
+                Name = "6010 系統維運",
+                State = "Active",
+                PercentCompl = 0,
+                SchedDue = new System.DateTime(2026, 11, 24),
+                IsMilestone = false
+            }
+        };
+
+        ProjectSummaryDto summary2357 = calcWithCalendar.ComputeProjectSummary(proj2357, null, acts2357, baseDate2357);
+
+        // 驗證延遲天數以工作日計算為 49 天 (日曆天 75 天 - 休假日 26 天 = 49 工作天)
+        AssertTrue(summary2357.DelayDays == 49,
+            "專案 [2357] 芯北PLM系统项目 延遲天數：依照 cn_Project_ScheduleUpdated 商業日曆工作日計算，迄今延遲精確為 49 天 (而非日曆天 75 天)");
     }
 
     /// <summary>

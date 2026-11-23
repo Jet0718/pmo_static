@@ -40,6 +40,13 @@ public class Innovator
         err.ErrorMessage = errorMessage;
         return err;
     }
+
+    public Item applySQL(string sql)
+    {
+        Item item = new Item("SQLResult", "");
+        item.ResultText = "";
+        return item;
+    }
 }
 
 /// <summary>
@@ -128,6 +135,11 @@ public class Item
     public bool isError()
     {
         return this.IsErrorFlag;
+    }
+
+    public string getResult()
+    {
+        return this.ResultText ?? "";
     }
 
     public int getItemCount()

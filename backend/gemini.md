@@ -62,8 +62,11 @@
 - **工作任務狀態皆不計里程碑任務 (`is_milestone == '1'`)**：
   - `ProjectHealthCalculator.ComputeProjectSummary` 統計專案工作任務狀態（`TotalTasks`、`CompletedTasks`、`InProgressTasks`、`NotStartedTasks`、`OverdueTasks`、`CriticalTaskCount`、`CriticalOverdueCount`）時，必須將 `act.IsMilestone == true` 的里程碑任務扣除忽略不計；里程碑任務僅單獨記錄於 `MilestoneCount` 與 `MilestoneCompletedCount`。
   - WBS 樹狀階段統計 `RollupStageMetricsRecursive` 與成員負荷統計 `WorkloadAggregator.AggregateByAssignee` 亦同步扣除里程碑任務。
-- **專案延遲天數只記錄延遲最多的任務天數（非累加）**：
-  - 專案 `DelayDays` 嚴禁採用資料庫累加之 `cn_delay_days`，而必須動態遍歷該專案未完成且逾期之非里程碑工作任務，記錄延遲迄今最多的任務天數 $\max(\text{asOfDate} - \text{act.SchedDue})$；若無逾期任務則為 0。
+- **專案延遲天數以工作日計算（比照 `cn_Project_ScheduleUpdated` 規則）且只記錄最大值（非累加）**：
+  - 延遲天數嚴格以「工作日 (Working Days)」計算，而非日曆天。
+  - 後端實作 `IBusinessCalendarService` / `ArasBusinessCalendarService`，比照 Aras 原生 Method `cn_Project_ScheduleUpdated` 執行 `SELECT ((DATEDIFF(DAY,'{0}','{1}')) - (SELECT count(*) FROM [innovator].[BUSINESS_CALENDAR] where (day_date>='{0}' and day_date<='{1}') and DAY_NUMBER<0))` 排除休假日與週末，並支援快取加速。
+  - 專案 `DelayDays` 取該專案所有未完成非里程碑工作任務中工作日最大延遲天數，扣除暫停天數 (`cn_pending_days`)：$\max(\max_{act}(\text{WorkdaysDelay}) - \text{PendingDays}, 0)$。
+  - 以 BDM-CRM 系統之 `[2357] 芯北PLM系统项目` 為驗證基準，任務結束日 `2026/9/9` 到今日 `2026/11/23` 精確計算為 49 天。若無逾期任務則為 0 天。
 - **扣除里程碑任務 (`is_milestone == '1'`)**：`WorkloadAggregator.AggregateByAssignee` 統計成員負荷時，必須將 `act.IsMilestone == true` 的里程碑任務扣除忽略不計。
 - **專案成員工時回報統計 (`workingtime_record` 與母表 `WorkingTime` 工時卡)**：
   - 針對當前篩選條件下之專案 ID 集合 (`project IN (...)`)，查詢 `workingtime_record` ItemType（提取 `project`、`source_id`、`cn_act2`、`work_hour`、`work_date`、`owned_by_id`、`created_by_id`）。
