@@ -1,4 +1,4 @@
-﻿param(
+param(
     [ValidateSet("add", "edit")]
     [string]$Action = "add"
 )
