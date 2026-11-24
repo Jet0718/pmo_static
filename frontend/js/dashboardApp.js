@@ -445,16 +445,30 @@
     var optionsHtml = "";
     (allProjects || []).forEach(function (item) {
       var sel = item.proj_num === p.proj_num ? " selected" : "";
-      optionsHtml += '<option value="' + item.proj_num + '"' + sel + '>[' + item.proj_num + '] ' + escapeHtml(item.project_name) + ' (' + item.health_status + ')</option>';
+      var statusSuffix = item.health_status || "GREEN";
+      if (item.operational_health && item.operational_health !== item.health_status) {
+        statusSuffix += " / " + (item.operational_health === "BLOCKED" ? "外部受阻" : (item.operational_health === "SUBSTANTIAL" ? "實質完工" : item.operational_health));
+      }
+      optionsHtml += '<option value="' + item.proj_num + '"' + sel + '>[' + item.proj_num + '] ' + escapeHtml(item.project_name) + ' (' + statusSuffix + ')</option>';
     });
+
+    // 雙軌健康度分流標籤渲染
+    var opHealthHtml = "";
+    if (p.operational_health) {
+      var opCls = p.operational_health === "BLOCKED" ? "op-health-blocked" : (p.operational_health === "SUBSTANTIAL" ? "op-health-substantial" : "op-health-" + p.operational_health);
+      var opText = p.operational_health === "BLOCKED" ? "🛡️ 內部健康度: 外部受阻" : (p.operational_health === "SUBSTANTIAL" ? "🏁 內部健康度: 實質完工待驗收" : "內部健康度: " + getHealthLabelText(p.operational_health));
+      opHealthHtml = '<span class="op-health-badge ' + opCls + '" style="font-size:12px;padding:3px 8px;vertical-align:middle;" title="內部團隊執行健康度：' + opText + '">' + opText + '</span>';
+    }
 
     var headerBanner =
       '<div class="pmo-card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">' +
         '<div>' +
-          '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">' +
             renderArasProjectItemIconBtn(p.id || "", p.proj_num, p.project_name) +
             '<h2 style="margin:0;font-size:18px;" id="detail-project-title">[' + p.proj_num + '] ' + escapeHtml(p.project_name) + '</h2>' +
-            '<span class="health-badge health-' + light + '"><span class="health-dot"></span>' + getHealthLabelText(light) + '</span>' +
+            renderProjectStallBadges(p) +
+            '<span class="health-badge health-' + light + '" title="排程合約健康度燈號"><span class="health-dot"></span>' + getHealthLabelText(light) + '</span>' +
+            opHealthHtml +
           '</div>' +
           '<div style="font-size:12px;color:#475569;margin-top:6px;">' +
             '專案經理 (owned_by_id): <strong>' + escapeHtml(p.pm_name) + '</strong> | ' +
@@ -476,7 +490,12 @@
         '<div class="kpi-card" style="border-left-color:#2563eb;">' +
           '<span class="kpi-label">整體實際完成率 / 計劃進度</span>' +
           '<div class="kpi-value">' + Number(p.actual_progress).toFixed(1) + '% <small style="font-size:14px;color:#64748b;">/ ' + Number(p.expected_progress).toFixed(1) + '%</small></div>' +
-          '<span class="kpi-sub">進度落差: ' + Number(p.progress_gap).toFixed(1) + '% | 延遲天數: ' + p.delay_days + ' 天</span>' +
+          '<span class="kpi-sub">進度落差: ' + Number(p.progress_gap).toFixed(1) + '% | ' +
+            (p.stall_type === "EXTERNAL" || p.stall_type === "COMMERCIAL"
+              ? '<span style="color:#10b981;font-weight:700;" title="非內部團隊因素停滯，延遲工作天數校正為 0 天">校正延遲: 0 天</span> <small style="color:#94a3b8;text-decoration:line-through;" title="合約原始排程延遲 ' + p.delay_days + ' 天">(' + p.delay_days + '天)</small>'
+              : '延遲天數: ' + p.delay_days + ' 天'
+            ) +
+          '</span>' +
         '</div>' +
         '<div class="kpi-card" style="border-left-color:#10b981;">' +
           '<span class="kpi-label">EVM 績效指標 (cn_spi / cn_cpi)</span>' +

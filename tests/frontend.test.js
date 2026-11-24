@@ -447,3 +447,56 @@ test("14. [HTML 實體防重覆轉義] escapeHtml 應正確防止 &amp; 雙重�
   const safeName2 = PMOCharts.escapeHtml("聯電 & 台積電 <測試專案>");
   assert.equal(safeName2, "聯電 &amp; 台積電 &lt;測試專案&gt;", "一般 & 與角括號應正常轉義");
 });
+
+test("15. [單一專案下鑽頁籤] renderProjectDetailView 應渲染雙軌健康度分流標籤與停滯歸因徽章", () => {
+  const mockDetailData = {
+    project: {
+      id: "PROJ_2345",
+      proj_num: 2345,
+      project_name: "強茂FMEA&amp;專案模組導入",
+      pm_name: "吳怡潔 Joy",
+      team_name: "TPS",
+      territory: "TPS",
+      customer_name: "強茂股份有限公司",
+      sched_start: "2026-01-19",
+      sched_due: "2026-06-26",
+      actual_progress: 81.0,
+      expected_progress: 100.0,
+      progress_gap: 19.0,
+      delay_days: 143,
+      adjusted_delay_days: 0,
+      health_status: "RED",
+      operational_health: "BLOCKED",
+      stall_reason: "cust_hold",
+      stall_type: "EXTERNAL",
+      stall_reason_label: "客戶端要求暫停",
+      spi: 0.81,
+      cpi: 1.80,
+      cn_sv: -87,
+      cn_cv: 174,
+      planned_value: 456,
+      earned_value: 369,
+      actual_cost: 205,
+      exp_mandays: 57,
+      remainder_hours: 251,
+      completed_tasks: 14,
+      total_tasks: 19,
+      in_progress_tasks: 5,
+      not_started_tasks: 0,
+      overdue_tasks: 5,
+      phases: []
+    },
+    wbs_items: [],
+    assignees: []
+  };
+
+  const html = PMODashboardApp.renderProjectDetailView(mockDetailData, [mockDetailData.project]);
+  assert.ok(html.includes("detail-project-title"), "應包含專案標題");
+  assert.ok(html.includes("badge-stall-external"), "應渲染外部停滯徽章");
+  assert.ok(html.includes("客戶端要求暫停"), "應顯示停滯原因中文標籤");
+  assert.ok(html.includes("op-health-blocked"), "應渲染內部健康度受阻樣式");
+  assert.ok(html.includes("🛡️ 內部健康度: 外部受阻"), "應顯示雙軌健康度分流文字");
+  assert.ok(html.includes("校正延遲: 0 天"), "KPI 區塊應顯示校正後延遲天數");
+  assert.ok(html.includes("(143天)"), "KPI 區塊應以刪除線顯示原始排程延遲");
+  assert.ok(!html.includes("&amp;amp;"), "不可出現二次轉義的 &amp;amp;");
+});

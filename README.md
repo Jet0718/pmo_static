@@ -21,6 +21,7 @@
    - **統計圖色塊互動展開**：點擊長條圖中之團隊色塊（`TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other`）時，向下展開該團隊之健康度燈號分佈、EVM 與多專案進度明細列表。
    - **左側 Item Icon 開啟 Aras 專案表單**：在專案清單左側增加一個專案 Item Icon 按鈕，點擊可呼叫 `top.aras.uiShowItem("Project", projectId)` 在 Aras Innovator 系統中直接開啟該專案 Item 畫面；點擊右側專案編號則切換至該專案之階段達成率與成員負荷分析。
 3. **各階段 (`Ph 1~12` & `WBS Element` / `Milestone`) 進度達成率與時程偏差分析 (`/api/v1/dashboard/project/{proj_num}` & `/api/v1/dashboard/wbs/{proj_num}`)**
+   - **專案抬頭雙軌健康度與停滯歸因徽章**：單一專案下鑽頁面頂部卡片同步呈現專案排程燈號、內部團隊執行健康度（如 `🛡️ 內部健康度: 外部受阻`、`🏁 內部健康度: 實質完工待驗收`）與停滯阻礙原因徽章（如 `[⏳ 客戶端要求暫停]`），並於整體完成率卡片提供校正後延遲工作日對比。
    - **Ph 1 ~ Ph 12 階段燈號矩陣**：直接讀取並視覺化 `Project` 上的 `percent_compl_1~12` 與 `status_1~12` 顏色狀態（含 Hex 色碼自動轉譯圓點標籤）。
    - **WBS 樹狀階段與時程偏差分析**：透過 `Sub WBS` 與 `WBS Activity2` 遞迴剖析各主階段與里程碑之完成度 (%)、應有進度、時程變異 (`cn_sv`)、**時程偏差天數 (Schedule Variance Days)** 與任務狀態分佈（已完成 / 進行中 / 未開始 / 逾期）。
 4. **專案成員 (`Assignee`) 任務負荷與工時回報統計 (`/api/v1/dashboard/assignees`)**

@@ -668,7 +668,7 @@ classDiagram
 | `GET /api/v1/dashboard/summary` | `GET_PORTFOLIO_SUMMARY` | `state`, `project_type`, `territory`, `team_id`, `pm_id`, `health_status`, `keyword`, `filter_blocked` (`all`/`exclude_external`/`only_external`), `stall_reason`, `is_substantially_completed` | 套用使用者團隊權限控管後之多專案 KPI 彙總、原始排程紅黃綠燈 (`rag_status`)、**團隊執行健康度 (`operational_rag`)**、**外部停滯統計 (`stall_summary`)**、**實質完工數 (`substantially_completed_count`)**、EVM、`team_performance`、`pm_performance`、含阻礙原因膠囊與校正延遲天數之專案清單 |
 | `GET /api/v1/dashboard/team/{team_id}` | `GET_TEAM_ANALYSIS` | `team_id`, `state` | 指定執行團隊 (`team_id`) 之專案進度、RAG 燈號分佈、PM 績效與風險專案明細 |
 | `GET /api/v1/dashboard/pm/{pm_id}` | `GET_PM_ANALYSIS` | `pm_id`, `state` | 指定專案經理 (`owned_by_id`) 負責之所有專案完成率、時程偏差、EVM 與狀態統計 |
-| `GET /api/v1/dashboard/project/{proj_num}` | `GET_PROJECT_DETAIL` | `proj_num` (專案編號或 ID) | 單一專案深度分析：基本與客製屬性、`Ph 1~12` 階段燈號、主階段 `WBS Element` 達成率與時程偏差天數、該專案成員任務負荷與工時回報統計 |
+| `GET /api/v1/dashboard/project/{proj_num}` | `GET_PROJECT_DETAIL` | `proj_num` (專案編號或 ID) | 單一專案深度分析：基本與客製屬性、**雙軌健康度 (`operational_health`) 與停滯歸因標籤 (`stall_reason_label`)**、校正後延遲工作日、`Ph 1~12` 階段燈號、主階段 `WBS Element` 達成率與時程偏差天數、該專案成員任務負荷與工時回報統計 |
 | `GET /api/v1/dashboard/wbs/{proj_num}` | `GET_WBS_ANALYSIS` | `proj_num` | 單一專案完整 `WBS Element` 遞迴樹狀結構 (`wbs_tree`)、各層級完成度、SPI/CPI、時程偏差與下轄任務狀態 |
 | `GET /api/v1/dashboard/assignees` | `GET_ASSIGNEE_WORKLOAD` | `proj_num` (選填), `team_id` (選填), `state`, `project_type`, `territory`, `health_status`, `keyword` | 當前篩選條件下之成員 (`Activity2.managed_by_id` & `workingtime_record`) 任務負荷與**工時回報統計排行榜**：含總任務、各狀態任務數、預估工時、**工時回報總值 (`reported_work_hours` / `reported_work_days`)** 以及**該成員在各專案的工時回報明細 (`project_worktime_breakdowns`)** |
 | `GET /api/v1/health` | `HEALTH_CHECK` | 無 | 系統健康檢查與版本資訊 |
