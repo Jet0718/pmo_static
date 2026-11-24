@@ -75,4 +75,4 @@ if (Test-Path $dllPath) {
     Write-Host " [SKIP] 5. 未找到 Libs.dll，略過 build.xsl 模擬"
 }
 
-Write-Host "=== 所有 AML Package 驗證測試全部通過 ==="
+Write-Host '=== 所有 AML Package 驗證測試全部通過 === '

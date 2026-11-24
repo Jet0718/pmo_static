@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet("add", "edit")]
     [string]$Action = "add"
 )
@@ -120,4 +120,4 @@ $manifestFile = Join-Path $rootAmlDir "imports.mf"
 Set-Content -Path $manifestFile -Value $manifestXml -Encoding UTF8
 Write-Host "已產生 Manifest 清單檔: $manifestFile"
 
-Write-Host "Aras AML Package 生成完畢，完全符合 PackageImportExportUtilities 規範。"
+Write-Host 'Aras AML Package 生成完畢，完全符合 PackageImportExportUtilities 規範。 '
