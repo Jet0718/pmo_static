@@ -27,6 +27,7 @@
    - 禁止宣告未使用的區域變數。
 2. **UI 防護（吸取 `pmomonthly` 實戰修正經驗）**：
    - **色碼防呆**：針對 `status_1~12`、`bcs_project_status` 或 `rollup_status`，若值為 Hex 色碼（如 `#FFD800`、`#FF0000`、`#00FF00`）則自動渲染為對應顏色圓點/標籤，避免將色碼當成純文字顯示。
+   - **HTML 實體防重覆轉義**：針對含有 `&amp;`、`&lt;`、`&gt;` 的專案名稱與文字（例如 `強茂FMEA&amp;專案模組導入`），`escapeHtml` 必須先執行實體解碼再轉義，防止頁面出現 `&amp;` 殘留。
    - **數值防呆**：針對完成率、SPI、CPI 執行 `isFinite` 與 `NaN` 防護，避免出現 `NaN%` 或 `[object Object]`。
    - **浮層防裁切**：Modal 與 Tooltip 統一掛載於 `document.body`，設定 `position: fixed; z-index: 999999`。
 

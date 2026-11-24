@@ -714,3 +714,11 @@ Aras Innovator 官方匯入工具 **`PackageImportExportUtilities`**（包含 `I
   在 Aras 12 中，ItemType 建立時必須具備合法的 `Allowed Permission` 實體 ID，若參照不存在的 Permission ID，`Import.exe` 會將其標記為未解析參照 (Unresolved Reference) 並剝離該關聯，致使 Aras 核心 CUI `PresentationConfiguration` 自動生成邏輯因缺少預設權限而引發 SQL Primary Key 衝突例外。
 - **運行模式**：使用者點擊 TOC 項目時，Aras Client 會在主工作區 iframe 內載入該 HTML5 儀表板，儀表板透過 `top.aras.applyMethod` 直接與後端 `PMO_ProjectAnalytics_API` 進行通訊。
 
+### 12.4 前端靜態資源部署與 HTML 實體防重覆轉義規範
+1. **靜態檔案伺服器位置**：
+   - TOC View 載入之 `<start_page>../customer/pmo_static/index.html</start_page>` 對應於 Aras Innovator 伺服器之實體路徑：
+     `...\Innovator\Client\customer\pmo_static\`
+   - 前端發行新版本（包含停滯阻礙標籤、雙軌健康度視覺化等功能）時，除更新資料庫中的 Server Method (`PMO_ProjectAnalytics_API`) 外，亦須同步更新伺服器該目錄下之靜態資源 (`index.html`, `css/dashboard.css`, `js/arasApiClient.js`, `js/dashboardApp.js`, `js/dashboardStore.js`, `js/svgChartEngine.js`)。
+2. **HTML 實體防重覆轉義 (Anti-Double-Escaping)**：
+   - Aras AML 或資料庫內之專案名稱若含有 XML/HTML 實體（如 `&amp;`、`&lt;`、`&gt;`，例如專案 `2345 強茂FMEA&amp;專案模組導入`），前端 `escapeHtml` 函式在進行轉義前必須先還原既有實體再重新轉義，防止頁面渲染時將 `&amp;` 二次轉義為 `&amp;amp;` 導致使用者看到原始實體代碼。
+

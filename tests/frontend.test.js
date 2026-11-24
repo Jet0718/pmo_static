@@ -439,3 +439,11 @@ test("13. [雙軌健康度與延遲校正] buildSummaryFromProjects 應正確輸
   assert.equal(proj2142.adjusted_delay_days, 0, "外部受阻專案校正延遲應為 0 天");
   assert.equal(proj2142.delay_days, 15, "原始排程延遲仍保留 15 天");
 });
+
+test("14. [HTML 實體防重覆轉義] escapeHtml 應正確防止 &amp; 雙重轉義", () => {
+  const safeName1 = PMOCharts.escapeHtml("強茂FMEA&amp;專案模組導入");
+  assert.equal(safeName1, "強茂FMEA&amp;專案模組導入", "含有 &amp; 的專案名稱轉義後應維持標準 &amp; 而非 &amp;amp;");
+
+  const safeName2 = PMOCharts.escapeHtml("聯電 & 台積電 <測試專案>");
+  assert.equal(safeName2, "聯電 &amp; 台積電 &lt;測試專案&gt;", "一般 & 與角括號應正常轉義");
+});

@@ -99,11 +99,16 @@ Aras 預設會從安裝目錄下的 `Innovator\Client\customer\` 讀取客製化
    - 您可以在伺服器上開啟 PowerShell 執行以下指令快速部署：
      ```powershell
      # 請將 $arasClientCustomerPath 替換為貴司 Aras 伺服器實際的 Client\customer 路徑
-     $arasClientCustomerPath = "C:\Program Files (x86)\Aras\Innovator\Innovator\Client\customer"
+     # （例如目標站台 D:\Program Files (x86)\Aras\BDM129\Innovator\Client\customer）
+     $arasClientCustomerPath = "D:\Program Files (x86)\Aras\BDM129\Innovator\Client\customer"
      $targetDir = Join-Path $arasClientCustomerPath "pmo_static"
 
      New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
      Copy-Item -Path "c:\TEST\pmo_static\frontend\*" -Destination $targetDir -Recurse -Force
+     ```
+   - **亦可透過專案自動化腳本一鍵同步至伺服器**：
+     ```powershell
+     python scripts/deploy_frontend_to_server.py
      ```
 4. 部署完成後，請確認伺服器上的目錄結構如下：
    ```text

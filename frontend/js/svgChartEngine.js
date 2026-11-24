@@ -11,13 +11,20 @@
 (function (root) {
   "use strict";
 
-  // 安全轉義 HTML 文字
+  // 安全轉義 HTML 文字（避免 &amp; 等 HTML 實體被重複轉義）
   function escapeHtml(str = "") {
-    return String(str || "")
+    var raw = String(str || "")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, "\"")
+      .replace(/&#39;/g, "'");
+    return raw
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   // 渲染健康度燈號 RAG 環狀圓餅圖 SVG
