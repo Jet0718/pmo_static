@@ -1,0 +1,23 @@
+﻿<AML>
+  <!-- 擴充既有 Project ItemType 之停滯/阻礙原因屬性 (cn_stall_reason) -->
+  <Item type="ItemType" id="02184EDAA80D499CB6EC94B159966DBE" action="edit">
+    <name>Project</name>
+    <Relationships>
+      <Item type="Property" id="8E7D6C5B4A3F40129384B5C6D7E8F9A1" action="merge">
+        <name>cn_stall_reason</name>
+        <label xml:lang="en">Stall Reason</label>
+        <label xml:lang="zc">專案停滯/阻礙原因</label>
+        <data_type>list</data_type>
+        <data_source keyed_name="cn_project_stall_reason" type="List">3A4B5C6D7E8F40129384B5C6D7E8F9A0</data_source>
+        <default_value>none</default_value>
+        <is_required>0</is_required>
+        <is_indexed>0</is_indexed>
+        <is_hidden>0</is_hidden>
+        <is_hidden2>0</is_hidden2>
+        <stored_length>64</stored_length>
+        <sort_order>9999</sort_order>
+        <help_tooltip xml:lang="zc">停滯阻礙歸因：區分外部受阻、商務爭議與內部瓶頸，防數據污染</help_tooltip>
+      </Item>
+    </Relationships>
+  </Item>
+</AML>

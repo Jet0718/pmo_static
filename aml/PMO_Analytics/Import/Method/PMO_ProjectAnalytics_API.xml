@@ -1,6 +1,6 @@
 ﻿<AML>
   <!-- 後端 C# RESTful 專案進度狀態分析統計 API Method -->
-  <Item type="Method" where="[Method].[name]='PMO_ProjectAnalytics_API'" action="edit">
+  <Item type="Method" id="8A91B2C3D4E54F60817293A4B5C6D7E8" action="add">
     <execution_allowed_to keyed_name="World" type="Identity">A73B655731924CD0B027E4F4D5FCC0A9</execution_allowed_to>
     <method_code><![CDATA[// ============================================================================
 // 檔案名稱：PMO_ProjectAnalytics_API.cs
@@ -4119,6 +4119,6 @@ public class MethodFooterPlaceholder
 ]]></method_code>
     <method_type>C#</method_type>
     <name>PMO_ProjectAnalytics_API</name>
-    <comments>BDM 系統專案進度狀態分析統計 RESTful API (整合 Project 客製欄位、Ph 1~12、WBS 階段偏差與成員負荷)</comments>
+    <comments>BDM 系統專案進度狀態分析統計 RESTful API (整合 Project 客製欄位、Ph 1~12、WBS 階段偏差、成員負荷、雙軌健康度分流與延遲天數校正)</comments>
   </Item>
 </AML>
