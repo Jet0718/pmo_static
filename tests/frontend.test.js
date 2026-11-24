@@ -41,29 +41,27 @@ test("2. normalizeTeamCode 應正確解析 GUID 或 keyed_name 歸類至 6 大�
 test("3. buildSummaryFromProjects 應正確計算多專案 KPI、RAG 分佈與支援 9 大專案類型複選", () => {
   const resAll = PMOApi.buildSummaryFromProjects(PMOApi.DEFAULT_MOCK_PROJECTS, { state: "ALL" });
   assert.equal(resAll.status, "success");
-  assert.equal(resAll.summary.total_projects, 6);
-  assert.equal(resAll.summary.active_projects, 6);
+  assert.equal(resAll.summary.total_projects, 9);
+  assert.equal(resAll.summary.active_projects, 9);
   assert.equal(resAll.rag_status.green_count, 4);
-  assert.equal(resAll.rag_status.amber_count, 1);
-  assert.equal(resAll.rag_status.red_count, 1);
+  assert.equal(resAll.rag_status.amber_count, 2);
+  assert.equal(resAll.rag_status.red_count, 3);
 
   // 測試健康度燈號篩選 RED
   const resRed = PMOApi.buildSummaryFromProjects(PMOApi.DEFAULT_MOCK_PROJECTS, { health_status: "RED" });
-  assert.equal(resRed.summary.total_projects, 1);
-  assert.equal(resRed.projects[0].proj_num, 2142);
+  assert.equal(resRed.summary.total_projects, 3);
 
   // 測試服務中心篩選
   const resHsinchu = PMOApi.buildSummaryFromProjects(PMOApi.DEFAULT_MOCK_PROJECTS, { territory: "新竹服務中心" });
-  assert.equal(resHsinchu.summary.total_projects, 2);
+  assert.equal(resHsinchu.summary.total_projects, 3);
 
   // 測試專案類型 9 大類複選 (OR)
   const resMultiType = PMOApi.buildSummaryFromProjects(PMOApi.DEFAULT_MOCK_PROJECTS, { project_type: "1.Standard,2.Professional,3.Upgrade" });
-  assert.equal(resMultiType.summary.total_projects, 6);
+  assert.equal(resMultiType.summary.total_projects, 9);
 
   // 測試執行團隊篩選 (TPS)
   const resTps = PMOApi.buildSummaryFromProjects(PMOApi.DEFAULT_MOCK_PROJECTS, { team_id: "TPS" });
-  assert.equal(resTps.summary.total_projects, 1);
-  assert.equal(resTps.projects[0].proj_num, 2127);
+  assert.equal(resTps.summary.total_projects, 2);
 });
 
 test("4. aggregateCrossProjectAssignees 應正確統計跨專案成員任務負荷與逾期排序", () => {
@@ -312,7 +310,7 @@ test("10. [需求 2] 預讀當前使用者 (user.team_id.keyed_name 與 user.val
   // 當 TPS (V8) 使用者點擊長條圖上的 ICS 色塊時，也應被限制在 TPS
   await storeTpsV8.expandTeamDetail("ICS");
   assert.equal(storeTpsV8.selectedTeamForDrill, "TPS");
-  assert.equal(storeTpsV8.summaryData.projects.length, 1);
+  assert.equal(storeTpsV8.summaryData.projects.length, 2);
   assert.equal(storeTpsV8.summaryData.projects[0].team_id, "TPS");
 
   // 情境 B：TPS 團隊成員但 value_score = V9 -> 預設篩選為 TPS，但允許跨團隊查詢 ICS
@@ -384,4 +382,60 @@ test("11. [需求 3 & 需求 4] 專案成員工時回報統計、各專案總工
   assert.ok(singleProjMember, "單一專案下鑽應找到張家豪於該專案之工時資料");
   assert.equal(singleProjMember.reported_work_hours, 214.6, "單一專案下鑽應顯示該員於專案 2127 之回報工時 214.6 hr");
   assert.equal(singleProjMember.project_worktime_breakdowns.length, 1);
+});
+
+test("12. [停滯歸因與 NoUI 查詢] parseNaturalLanguageQuery 應正確解析停滯原因、實質完工與淨化戰況等指令", () => {
+  // 1. 測試「真落後」
+  const qRealLag = PMOApi.parseNaturalLanguageQuery("進行中 團隊真落後");
+  assert.equal(qRealLag.filter_blocked, "exclude_external");
+  assert.equal(qRealLag.health_status, "RED");
+
+  // 2. 測試「等待客戶系統」
+  const qWaitCust = PMOApi.parseNaturalLanguageQuery("查詢等待客戶系統一併上線的專案");
+  assert.equal(qWaitCust.filter_blocked, "only_external");
+  assert.equal(qWaitCust.stall_reason, "wait_cust_system");
+
+  // 3. 測試「商務爭議」
+  const qDispute = PMOApi.parseNaturalLanguageQuery("商務爭議 Standard");
+  assert.equal(qDispute.stall_reason, "commercial_dispute");
+  assert.equal(qDispute.project_type, "1.Standard");
+
+  // 4. 測試「實質完工」
+  const qSubstantial = PMOApi.parseNaturalLanguageQuery("實質完工待驗收");
+  assert.equal(qSubstantial.is_substantially_completed, "true");
+
+  // 5. 測試「排除外部」或「淨化戰況」
+  const qPurify = PMOApi.parseNaturalLanguageQuery("進行中 排除外部受阻 淨化戰況");
+  assert.equal(qPurify.filter_blocked, "exclude_external");
+});
+
+test("13. [雙軌健康度與延遲校正] buildSummaryFromProjects 應正確輸出 operational_rag、stall_summary、實質完工與校正後延遲天數", () => {
+  // 1. 全域分析
+  const res = PMOApi.buildSummaryFromProjects(PMOApi.DEFAULT_MOCK_PROJECTS, { state: "ALL" });
+  assert.equal(res.status, "success");
+  assert.ok(res.operational_rag, "應輸出 operational_rag 物件");
+  assert.ok(res.stall_summary, "應輸出 stall_summary 物件");
+
+  // 驗證雙軌分流：合約 RED 共有 3 案 (2142, 2188, 2190)，但 2142 為外部受阻 (BLOCKED)，2190 為商務爭議 (BLOCKED)，因此 operational_rag.red_count 僅為 1 案 (2188 內部瓶頸)
+  assert.equal(res.rag_status.red_count, 3, "整體合約排程落後應為 3 案");
+  assert.equal(res.operational_rag.red_count, 1, "內部團隊真落後應分流為 1 案");
+  assert.equal(res.operational_rag.blocked_count, 2, "外部受阻與商務爭議應計 2 案 (2142, 2190)");
+  assert.equal(res.operational_rag.substantial_count, 1, "實質完工待收尾應計 1 案 (2175)");
+  assert.equal(res.substantially_completed_count, 2, "實質完工標記專案總數應為 2 案 (2175, 2190)");
+
+  // 2. 測試「排除外部受阻 (filter_blocked = exclude_external)」淨化數據過濾
+  const resPurified = PMOApi.buildSummaryFromProjects(PMOApi.DEFAULT_MOCK_PROJECTS, {
+    state: "ALL",
+    filter_blocked: "exclude_external"
+  });
+  // 原始 9 案扣除 2142 (EXTERNAL)、2175 (EXTERNAL)、2190 (COMMERCIAL)，淨化後應剩 6 案
+  assert.equal(resPurified.summary.total_projects, 6, "排除外部與商務受阻後應保留 6 案純團隊作戰資料");
+  assert.equal(resPurified.rag_status.red_count, 1, "淨化後的紅燈案僅剩 2188 真正內部落後專案");
+  assert.equal(resPurified.projects[0].proj_num !== 2142 && resPurified.projects.every(p => p.proj_num !== 2142), true, "2142 應被完全排除");
+
+  // 3. 測試延遲天數校正 (AdjustedDelayDays)：外部受阻專案延遲天數校正為 0 天
+  const proj2142 = res.projects.find(p => p.proj_num === 2142);
+  assert.ok(proj2142);
+  assert.equal(proj2142.adjusted_delay_days, 0, "外部受阻專案校正延遲應為 0 天");
+  assert.equal(proj2142.delay_days, 15, "原始排程延遲仍保留 15 天");
 });

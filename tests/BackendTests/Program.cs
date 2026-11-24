@@ -683,5 +683,110 @@ public class Program
                    json2364.Contains("\"reported_work_hours\":4") &&
                    json2364.Contains("\"reported_work_days\":0.5"),
             "專案 2364 工時回報驗證：全案總回報工時應精確為 49 hr (6.13 工天)，羅仁 45 hr (5.63 工天)、張智堯 4 hr (0.5 工天)，且不重複計入周樹榮");
+
+        // 9. 測試停滯阻礙歸因與責任分離判定 (EXTERNAL / COMMERCIAL / INTERNAL)
+        ProjectRecord projCustSys = new ProjectRecord
+        {
+            ProjNum = 9001,
+            Name = "客戶周邊系統等待案",
+            RollupPercentCompl = 75,
+            PlanCompl = 100,
+            StallReason = "wait_cust_system",
+            DelayDays = 45
+        };
+        ProjectSummaryDto sumCustSys = healthCalc.ComputeProjectSummary(projCustSys, null, null, today);
+        AssertTrue(sumCustSys.StallType == "EXTERNAL", "停滯歸因驗證：wait_cust_system 應歸因為 EXTERNAL");
+        AssertTrue(sumCustSys.OperationalHealth == "BLOCKED", "雙軌健康度驗證：外部受阻專案 OperationalHealth 應為 BLOCKED");
+        AssertTrue(sumCustSys.AdjustedDelayDays == 0, "校正延遲天數驗證：外部受阻專案 AdjustedDelayDays 應校正為 0 天");
+        AssertTrue(sumCustSys.HealthStatus == "RED", "整體健康度驗證：進度落後 20% 原生排程仍為 RED");
+
+        ProjectRecord projCommercial = new ProjectRecord
+        {
+            ProjNum = 9002,
+            Name = "合約追加爭議案",
+            RollupPercentCompl = 70,
+            PlanCompl = 95,
+            StallReason = "commercial_dispute",
+            DelayDays = 30
+        };
+        ProjectSummaryDto sumComm = healthCalc.ComputeProjectSummary(projCommercial, null, null, today);
+        AssertTrue(sumComm.StallType == "COMMERCIAL", "停滯歸因驗證：commercial_dispute 應歸因為 COMMERCIAL");
+        AssertTrue(sumComm.OperationalHealth == "BLOCKED", "雙軌健康度驗證：商務爭議專案 OperationalHealth 應為 BLOCKED");
+        AssertTrue(sumComm.AdjustedDelayDays == 0, "校正延遲天數驗證：商務爭議專案 AdjustedDelayDays 應校正為 0 天");
+
+        ProjectRecord projInternal = new ProjectRecord
+        {
+            ProjNum = 9003,
+            Name = "內部架構卡關案",
+            RollupPercentCompl = 60,
+            PlanCompl = 90,
+            StallReason = "internal_bottleneck",
+            DelayDays = 25
+        };
+        ProjectSummaryDto sumInternal = healthCalc.ComputeProjectSummary(projInternal, null, null, today);
+        AssertTrue(sumInternal.StallType == "INTERNAL", "停滯歸因驗證：internal_bottleneck 應歸因為 INTERNAL");
+        AssertTrue(sumInternal.OperationalHealth == "RED", "雙軌健康度驗證：內部真落後專案 OperationalHealth 應為 RED (真落後)");
+        AssertTrue(sumInternal.AdjustedDelayDays == 25, "校正延遲天數驗證：內部落後專案 AdjustedDelayDays 保持原始延遲天數");
+
+        // 10. 測試實質完工待驗收判定 (完成率 >= 85% 且未完成任務 <= 2 且外部卡關)
+        ProjectRecord projSubstantial = new ProjectRecord
+        {
+            ProjNum = 9004,
+            Name = "已完成大部等待驗收上線案",
+            RollupPercentCompl = 92,
+            PlanCompl = 100,
+            StallReason = "wait_cust_system",
+            DelayDays = 60
+        };
+        System.Collections.Generic.List<ActivityRecord> subActs = new System.Collections.Generic.List<ActivityRecord>
+        {
+            new ActivityRecord { Id = "T1", State = "Complete", PercentCompl = 100 },
+            new ActivityRecord { Id = "T2", State = "Complete", PercentCompl = 100 },
+            new ActivityRecord { Id = "T3", State = "Complete", PercentCompl = 100 },
+            new ActivityRecord { Id = "T4", State = "Complete", PercentCompl = 100 },
+            new ActivityRecord { Id = "T5", State = "Active", PercentCompl = 50, SchedDue = today.AddDays(-10) } // 僅剩 1 項
+        };
+        ProjectSummaryDto sumSub = healthCalc.ComputeProjectSummary(projSubstantial, null, subActs, today);
+        AssertTrue(sumSub.IsSubstantiallyCompleted, "實質完工驗證：完成率 92% 且剩餘任務 1 項應判定為 IsSubstantiallyCompleted = true");
+        AssertTrue(sumSub.OperationalHealth == "SUBSTANTIAL", "雙軌健康度驗證：實質完工專案 OperationalHealth 應為 SUBSTANTIAL");
+
+        // 11. 測試 /api/v1/dashboard/summary 之 filter_blocked 過濾與 operational_rag 統計
+        FakeProjectRepository repoFilter = new FakeProjectRepository();
+        repoFilter.CurrentUser = ctxPmoV9;
+        repoFilter.Projects.Add(projCustSys); // EXTERNAL 受阻
+        repoFilter.Projects.Add(projCommercial); // COMMERCIAL 受阻
+        repoFilter.Projects.Add(projInternal); // INTERNAL 真落後
+        repoFilter.Projects.Add(new ProjectRecord { ProjNum = 9005, Name = "正常執行中專案", RollupPercentCompl = 95, PlanCompl = 95, State = "Active", ProjectType = "1.Standard" });
+
+        ProjectAnalyticsController ctrlFilter = new ProjectAnalyticsController(repoFilter, healthCalc, stageAnalyzer, workloadAgg);
+
+        // 11.1 全部專案查詢
+        Item reqAll = new Item("Method", "PMO_ProjectAnalytics_API");
+        reqAll.setProperty("route", "/api/v1/dashboard/summary");
+        reqAll.setProperty("state", "ALL");
+        reqAll.setProperty("project_type", "ALL");
+        string jsonAll = ctrlFilter.HandleItemRequest(reqAll, today);
+
+        AssertTrue(jsonAll.Contains("\"operational_rag\":{") &&
+                   jsonAll.Contains("\"blocked_count\":2") &&
+                   jsonAll.Contains("\"stall_summary\":{") &&
+                   jsonAll.Contains("\"wait_cust_system_count\":1") &&
+                   jsonAll.Contains("\"commercial_dispute_count\":1"),
+            "全域統計驗證：應正確輸出 operational_rag (blocked_count: 2) 與 stall_summary (wait_cust_system: 1, commercial_dispute: 1)");
+
+        // 11.2 排除外部受阻專案 (filter_blocked = exclude_external，淨化團隊戰況)
+        Item reqExcludeExt = new Item("Method", "PMO_ProjectAnalytics_API");
+        reqExcludeExt.setProperty("route", "/api/v1/dashboard/summary");
+        reqExcludeExt.setProperty("state", "ALL");
+        reqExcludeExt.setProperty("project_type", "ALL");
+        reqExcludeExt.setProperty("filter_blocked", "exclude_external");
+        string jsonExcludeExt = ctrlFilter.HandleItemRequest(reqExcludeExt, today);
+
+        AssertTrue(!jsonExcludeExt.Contains("客戶周邊系統等待案") &&
+                   !jsonExcludeExt.Contains("合約追加爭議案") &&
+                   jsonExcludeExt.Contains("內部架構卡關案") &&
+                   jsonExcludeExt.Contains("正常執行中專案") &&
+                   jsonExcludeExt.Contains("\"total_projects\":2"),
+            "數據淨化驗證：filter_blocked = exclude_external 應成功剔除非團隊因素受阻專案，僅保留團隊自身專案 (2筆)");
     }
 }

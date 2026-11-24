@@ -26,6 +26,12 @@
     - 若符合上述四個執行團隊，且 `user.value_score` **不等於 `V9` 且不等於 `V10`**，則系統強制限制僅能查詢自身所屬執行團隊（禁止查詢其他執行團隊）。
   - **專案清單左側 Aras Item Icon 開啟專案畫面**：在專案清單第一欄左側提供專案 Item Icon 按鈕，點擊可呼叫 `top.aras.uiShowItem("Project", projectId)` 直接於 Aras Innovator 系統中開啟該專案 Item 表單畫面；點擊專案編號則維持下鑽至單一專案階段與成員分析視圖。
   - **專案成員工時回報統計與跨專案下鑽明細 (`workingtime_record`)**：新增對當前篩選條件下各成員回報任務之工時統計總值排行，並於專案成員任務負荷統計表中增加「使用者工時回報總值」下鑽連結，點擊可開啟浮層檢視該成員在各專案的回報總工時 (`hr`) 與總工天 (`工時 / 8`) 明細。
+  - **停滯阻礙歸因、雙軌健康度分流與延遲校正防數據污染機制 (`cn_stall_reason` / `OperationalHealth` / `AdjustedDelayDays`)**：
+    - 將停滯原因結構化為：等待客戶系統 (`wait_cust_system`)、商務合約爭議 (`commercial_dispute`)、客戶暫停 (`cust_hold`)、客戶規格變更 (`cust_scope_change`)、內部瓶頸 (`internal_bottleneck`)。
+    - 識別「實質完工待驗收 (`is_substantially_completed`)」專案（完成率 $\ge 85\%$ 且剩餘任務 $\le 2$），抽離常規落後池。
+    - 雙軌健康度分離：保留對客戶之排程燈號 (`HealthStatus`)，並提供淨化後的內部團隊執行健康度 (`OperationalHealth`：綠/黃/紅/受阻)，外部受阻不計入團隊懲罰性紅燈。
+    - 校正延遲工作日 (`AdjustedDelayDays`)：外部受阻期間扣除停滯天數，防止延遲天數無上限污染統計。
+    - NoUI 自然語言支援「真落後 / 內部落後 / 等待客戶 / 商務爭議 / 實質完工 / 排除外部」詞彙解析，頂層 KPI 新增外部受阻與實質完工分流卡片。
 
 ### 1.2 架構圖
 ```mermaid
@@ -114,6 +120,11 @@ flowchart TB
 | | `cn_closed_date` | 結案日 | date | 實際結案日期 |
 | | `cn_delay_days` | Delay Days | integer | 專案延遲天數 |
 | | `cn_pending_days` | Pending Days | integer | 專案暫停天數 |
+| **阻礙歸因與雙軌健康度** | `cn_stall_reason` | 停滯阻礙原因 | list / string | 停滯分類代碼 (`none`, `wait_cust_system`, `commercial_dispute`, `cust_scope_change`, `cust_hold`, `internal_bottleneck`) |
+| | `cn_stall_type` | 歸因責任類別 | string | 責任主體維度 (`NONE`, `EXTERNAL`, `COMMERCIAL`, `INTERNAL`) |
+| | `is_substantially_completed` | 實質完工標記 | boolean | 專案實質完工待收尾標記 (完成率 $\ge 85\%$ 且剩餘工作任務 $\le 2$) |
+| | `operational_health` | 內部執行健康度 | string | 扣除外部受阻之團隊真實健康度 (`GREEN`, `YELLOW`, `RED`, `BLOCKED`, `SUBSTANTIAL`) |
+| | `adjusted_delay_days` | 校正後延遲工作天數 | integer | 扣除外部停滯工作天數之真實團隊延遲天數 |
 | **EVM 與工時指標** | `cn_pv` / `cn_ev` / `cn_ac` | PV / EV / AC | foreign | 計畫值 / 實獲值 / 實際工時成本 (來自 Root WBS) |
 | | `cn_sv` / `cn_cv` | SV時程變異 / CV成本變異 | foreign | 時程變異 / 成本變異 |
 | | `cn_spi` / `cn_cpi` | SPI / CPI | foreign | 進度績效指標 / 成本績效指標 |
@@ -150,7 +161,7 @@ flowchart TB
    - 優先取 `Project.cn_plan_compl`（計劃進度 %）。
    - 若 `cn_plan_compl` 未填或為 0，則依當前日期 (`AsOfDate`) 與 `date_start_sched` ~ `date_due_sched` 線性插值計算應有進度百分比。
    - **進度落差**：$$\text{ProgressGap} = \text{ExpectedProgress} - \text{ActualProgress}$$
-3. **健康度燈號 (`HealthStatus`：綠/黃/紅燈) 判定標準與任務狀態計算**：
+3. **健康度燈號 (`HealthStatus`：綠/黃/紅燈) 與雙軌執行健康度 (`OperationalHealth`) 判定**：
    - **工作任務狀態皆不計里程碑任務 (`is_milestone == '1'`)**：
      - 專案工作任務狀態（總數 `total_tasks`、完成數 `completed_tasks`、進行中 `in_progress_tasks`、未開始 `not_started_tasks`、逾期項數 `overdue_tasks`、要徑數 `critical_tasks`）全面排除 `is_milestone = '1'` 的里程碑任務。里程碑僅單獨記錄於 `milestone_count` / `milestone_completed_count`。
    - **專案延遲天數以工作日計算（比照 `cn_Project_ScheduleUpdated` 規則）且只記錄最大值（不累加）**：
@@ -158,18 +169,25 @@ flowchart TB
        $$\text{DiffWorkdays}(D_1, D_2) = \text{DATEDIFF}(DAY, D_1, D_2) - \text{Count}(\text{BUSINESS\_CALENDAR.day\_date} \in [D_1, D_2] \land \text{DAY\_NUMBER} < 0)$$
      - **扣除暫停天數**：專案延遲天數為該專案未完成非里程碑工作任務中工作日最大延遲天數扣除暫停天數：$$\text{DelayDays} = \max(\max_{act}(\text{DiffWorkdays}(act.\text{SchedDue}, \text{Today})) - \text{cn\_pending\_days}, 0)$$
      - **實例驗證**：以 BDM-CRM 系統之 `[2357] 芯北PLM系统项目` 為標準，其未完成任務計劃結束日為 `2026/09/09`，基準日為 `2026/11/23`，經扣除 26 天休假日後，延遲天數精準為 **49 天**（非日曆天 75 天）。若無逾期任務則為 0 天。
-   - **紅燈 (`RED` - 嚴重延遲)**（滿足任一條件）：
-     - 存在已逾期未完成之要徑任務 (`is_critical = 1`)；
-     - 逾期任務佔比 $\frac{\text{OverdueTasks}}{\text{TotalTasks}} > 20\%$（以非里程碑工作任務計算）；
-     - 整體進度落差 $\text{ProgressGap} > 20\%$；
-     - 或 EVM 進度績效 $\text{SPI} > 0$ 且 $\text{SPI} < 0.80$。
-   - **黃燈 (`YELLOW` - 進度警示)**（未達紅燈，且滿足任一條件）：
-     - 逾期工作任務數 $\text{OverdueTasks} > 0$（佔比 $\le 20\%$）或專案任務最大延遲天數 $> 0$；
-     - 整體進度落差 $10\% \le \text{ProgressGap} \le 20\%$；
-     - 3 日內有即將到期但尚未完成的要徑任務 (`0 <= days_remaining <= 3` 且 `is_critical = 1`)；
-     - 或 EVM 進度績效 $0.80 \le \text{SPI} < 0.95$。
-   - **綠燈 (`GREEN` - 進度正常)**：
-     - 無逾期任務、進度落差 $< 10\%$ 且 $\text{SPI} \ge 0.95$（或無異常指標）。
+   - **原始排程健康度燈號 (`HealthStatus`)**：
+     - **紅燈 (`RED` - 嚴重延遲)**：存在逾期要徑任務、逾期任務佔比 $> 20\%$、進度落差 $\text{ProgressGap} > 20\%$ 或 $\text{SPI} < 0.80$。
+     - **黃燈 (`YELLOW` - 進度警示)**：逾期任務數 $> 0$、延遲天數 $> 0$、$10\% \le \text{ProgressGap} \le 20\%$、3日內有即將到期要徑任務或 $0.80 \le \text{SPI} < 0.95$。
+     - **綠燈 (`GREEN` - 進度正常)**：無逾期任務、進度落差 $< 10\%$ 且 $\text{SPI} \ge 0.95$。
+   - **停滯歸因與雙軌內部執行健康度 (`OperationalHealth`) 判定防數據污染演算法**：
+     - **停滯歸因維度 (`StallType`)**：
+       - `wait_cust_system` (等待客戶周邊系統上線)、`cust_hold` (客戶要求暫停)、`cust_scope_change` (需求變更評估)：歸因 `EXTERNAL`。
+       - `commercial_dispute` (商務爭議/追加合約談判)：歸因 `COMMERCIAL`。
+       - `internal_bottleneck` (內部資源/架構瓶頸)：歸因 `INTERNAL`。
+       - 無阻礙標記：歸因 `NONE`。
+     - **實質完工待收尾識別 (`is_substantially_completed`)**：
+       $$\text{ActualProgress} \ge 85\% \land (\text{TotalTasks} - \text{CompletedTasks} \le 2) \land (\text{StallType} \in \{\text{EXTERNAL}, \text{COMMERCIAL}\})$$
+       符合上述條件者自動標註為「實質完工待驗收」，從一般落後統計池中抽離。
+     - **內部執行健康度 (`OperationalHealth`)**：
+       - 若為 `is_substantially_completed`：標註為 `SUBSTANTIAL` (實質完工，不給予團隊紅燈懲罰)。
+       - 若 `StallType` 為 `EXTERNAL` 或 `COMMERCIAL`：標註為 `BLOCKED` (受阻停滯，由業務/高層介入協處，不計入團隊執行紅燈)。
+       - 若無外部阻礙或歸因為 `INTERNAL`：如實繼承 `HealthStatus`，真落後者顯示 `RED` (團隊真落後)。
+     - **校正後延遲工作日 (`AdjustedDelayDays`)**：
+       - 當專案處於 `EXTERNAL` 或 `COMMERCIAL` 阻礙中，延遲天數自動扣除停滯天數：$$\text{AdjustedDelayDays} = \max(\text{DelayDays} - \text{StallDays}, 0)$$
 
 ### 3.2 各階段 (`Ph 1~12` 與 `WBS Element`) 達成率與時程偏差分析
 1. **專案主檔 `Ph 1 ~ Ph 12` 階段矩陣**：
@@ -214,6 +232,13 @@ flowchart TB
      - **執行團隊**：識別 `TPS`、`ICS`、`PMO`、`SUS`、`SHS`、`Other/其他團隊`、`全部團隊`（若 `is_team_restricted == true`，則忽略跨團隊詞彙並維持鎖定自身團隊）。
      - **服務中心**：識別 `台北`、`新竹`、`台中`、`台南`。
      - **健康度燈號**：識別 `紅燈/嚴重延遲/危險/RED`、`黃燈/警示/注意/YELLOW`、`綠燈/正常/良好/GREEN`。
+     - **停滯阻礙與數據淨化詞彙 (全新擴充)**：
+       - `真落後 / 內部落後` &rarr; `health_status = RED`, `filter_blocked = exclude_external` (排除外部停滯，專注團隊內部執行問題)。
+       - `等待客戶 / 等客戶系統` &rarr; `stall_reason = wait_cust_system`。
+       - `商務爭議 / 合約爭議` &rarr; `stall_reason = commercial_dispute`。
+       - `外部卡關 / 外部受阻` &rarr; `filter_blocked = only_external`。
+       - `實質完工 / 待驗收` &rarr; `is_substantially_completed = true`。
+       - `排除外部 / 排除受阻` &rarr; `filter_blocked = exclude_external`。
      - **關鍵字**：將扣除上述結構化條件詞彙後的剩餘字詞（如專案編號 `2127`、客戶名稱、PM 姓名、專案名稱）作為 `keyword` 模糊搜尋。
 
 ---
@@ -228,6 +253,9 @@ FUNCTION HandleRequest(requestItem, innovator):
     teamFilter = Sanitize(requestItem.getProperty("team_id", "ALL"))
     pmFilter = Sanitize(requestItem.getProperty("pm_id", "ALL"))
     healthFilter = Sanitize(requestItem.getProperty("health_status", "ALL"))
+    filterBlocked = Sanitize(requestItem.getProperty("filter_blocked", "all")) // all / exclude_external / only_external
+    stallReasonFilter = Sanitize(requestItem.getProperty("stall_reason", "ALL"))
+    isSubstantialFilter = Sanitize(requestItem.getProperty("is_substantially_completed", ""))
     projNum = Sanitize(requestItem.getProperty("proj_num", ""))
 
     SWITCH route:
@@ -241,7 +269,17 @@ FUNCTION HandleRequest(requestItem, innovator):
                 wbs = rootWbsMap.Get(proj.WbsId)
                 acts = activitiesMap.Get(proj.ProjNum)
                 dto = HealthCalculator.ComputeProjectSummary(proj, wbs, acts, TODAY)
-                IF healthFilter == "ALL" OR dto.HealthStatus == healthFilter:
+                
+                // 套用停滯歸因與實質完工過濾
+                IF filterBlocked == "exclude_external" AND (dto.StallType == "EXTERNAL" OR dto.StallType == "COMMERCIAL"):
+                    CONTINUE
+                IF filterBlocked == "only_external" AND dto.StallType != "EXTERNAL" AND dto.StallType != "COMMERCIAL":
+                    CONTINUE
+                IF stallReasonFilter != "ALL" AND dto.StallReason != stallReasonFilter:
+                    CONTINUE
+                IF isSubstantialFilter == "true" AND NOT dto.IsSubstantiallyCompleted:
+                    CONTINUE
+                IF healthFilter == "ALL" OR dto.HealthStatus == healthFilter OR dto.OperationalHealth == healthFilter:
                     summaries.Add(dto)
 
             kpi = HealthCalculator.BuildPortfolioKpi(summaries)
@@ -250,6 +288,9 @@ FUNCTION HandleRequest(requestItem, innovator):
             RETURN JsonResponse({
                 summary: kpi,
                 rag_status: kpi.RagDistribution,
+                operational_rag: kpi.OperationalRagDistribution,
+                stall_summary: kpi.StallSummary,
+                substantially_completed_count: kpi.SubstantialCount,
                 evm_summary: kpi.EvmSummary,
                 team_performance: teamPerf,
                 pm_performance: pmPerf,
@@ -419,6 +460,11 @@ erDiagram
         float cn_plan_compl "計劃進度 (%)"
         int cn_delay_days "延遲天數"
         int cn_pending_days "暫停天數"
+        string cn_stall_reason "停滯原因 (wait_cust_system/commercial_dispute...)"
+        string cn_stall_type "責任歸因 (EXTERNAL/COMMERCIAL/INTERNAL)"
+        boolean is_substantially_completed "實質完工待驗收 (>=85%且剩餘任務<=2)"
+        string operational_health "內部執行健康度 (GREEN/YELLOW/RED/BLOCKED/SUBSTANTIAL)"
+        int adjusted_delay_days "校正後延遲工作日"
         float cn_spi "SPI 進度績效 (foreign)"
         float cn_cpi "CPI 成本績效 (foreign)"
         float cn_sv "SV 時程變異 (foreign)"
@@ -485,14 +531,22 @@ flowchart TD
     CalcActual --> CalcExpected["決定應有進度 Expected%:\n優先取 cn_plan_compl，若無則依 date_start_sched ~ date_due_sched 計算\n進度落差 Gap = Expected% - Actual%"]
 
     CalcExpected --> CheckRed{"是否符合紅燈 (RED) 條件?\n1. CriticalOverdue > 0\n2. Overdue / Total > 20%\n3. Gap > 20%\n4. (SPI > 0 且 SPI < 0.80)"}
-    CheckRed -- "是" --> LightRed["HealthStatus = RED (紅燈：危險/嚴重延遲)"]
+    CheckRed -- "是" --> LightRed["HealthStatus = RED (原始排程紅燈)"]
     CheckRed -- "否" --> CheckYellow{"是否符合黃燈 (YELLOW) 條件?\n1. Overdue > 0\n2. 10% <= Gap <= 20%\n3. 3日內有未完成要徑任務\n4. (0.80 <= SPI < 0.95)"}
-    CheckYellow -- "是" --> LightYellow["HealthStatus = YELLOW (黃燈：注意/進度警示)"]
-    CheckYellow -- "否" --> LightGreen["HealthStatus = GREEN (綠燈：良好/進度正常)"]
+    CheckYellow -- "是" --> LightYellow["HealthStatus = YELLOW (原始排程黃燈)"]
+    CheckYellow -- "否" --> LightGreen["HealthStatus = GREEN (原始排程綠燈)"]
 
-    LightRed --> Output(["輸出完整 ProjectSummaryDto"])
-    LightYellow --> Output
-    LightGreen --> Output
+    LightRed --> CheckDual{"判定雙軌責任歸因\n(Stall Attribution)"}
+    LightYellow --> CheckDual
+    LightGreen --> CheckDual
+
+    CheckDual -- "實質完工 (Actual>=85%且未完成任務<=2)" --> DualSub["OperationalHealth = SUBSTANTIAL\n(實質完工待收尾，抽離落後池)"]
+    CheckDual -- "外部/商務停滯 (StallType: EXTERNAL/COMMERCIAL)" --> DualBlocked["OperationalHealth = BLOCKED\n(外部受阻待協商，扣除停滯天數)"]
+    CheckDual -- "無外部受阻或內部原因 (INTERNAL/NONE)" --> DualInternal["OperationalHealth = 繼承 HealthStatus\n(真實團隊執行戰況)"]
+
+    DualSub --> Output(["輸出完整 ProjectSummaryDto\n(含雙軌健康度與校正延遲天數)"])
+    DualBlocked --> Output
+    DualInternal --> Output
 ```
 
 ---
@@ -501,23 +555,25 @@ flowchart TD
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Pending : 任務建立 (not_started / Pending)
-    Pending --> Active : 任務啟動 (in_progress / Active)
-    Active --> Completed : 任務完成 (completed / Complete / 100%)
-    Pending --> Completed : 直接完成
+    [*] --> Active_Progressing : 專案啟動 (Active)
 
-    state "PMO 進度分析統計歸類 (Analytics Bucket)" as Bucket {
-        state "未開始 (Not Started)" as B_NotStarted
-        state "進行中正常 (On Track)" as B_OnTrack
-        state "已逾期/延遲 (Overdue / Delayed)" as B_Overdue
-        state "已完成 (Completed)" as B_Completed
+    state "正常推進 (Progressing)" as Active_Progressing {
+        [*] --> Internal_Normal : 排程正常 (GREEN)
+        Internal_Normal --> Internal_Lagging : 內部技術/工時延誤 (RED / YELLOW)
+        Internal_Lagging --> Internal_Normal : 趕工復原
     }
 
-    Pending --> B_NotStarted : date_due_sched >= Today
-    Pending --> B_Overdue : date_due_sched < Today (逾期未啟動)
-    Active --> B_OnTrack : date_due_sched >= Today 且 days_remaining >= 0
-    Active --> B_Overdue : date_due_sched < Today 或 days_remaining < 0
-    Completed --> B_Completed : 計入已完成，並計算 (date_due_act - date_due_sched) 偏差天數
+    Active_Progressing --> Substantially_Completed : 實際完成度 >= 85% 且核心交付完成
+    Active_Progressing --> Externally_Blocked : 遇到客戶周邊系統未上線 (wait_cust_system)
+    Active_Progressing --> Commercial_Dispute : 遇到驗收款/合約追加款爭議 (commercial_dispute)
+    Active_Progressing --> Customer_Hold : 客戶要求暫停 (cust_hold)
+
+    Externally_Blocked --> Active_Progressing : 客戶系統就緒，重啟執行
+    Commercial_Dispute --> Active_Progressing : 商務爭議化解，重啟執行
+    Customer_Hold --> Active_Progressing : 客戶解凍專案
+
+    Substantially_Completed --> Closed : 最終正式驗收完成 (closed)
+    Externally_Blocked --> Closed : 專案協商終止或補簽結案
 ```
 
 ---
@@ -608,8 +664,8 @@ classDiagram
 | RESTful 路徑 (`route`) | 對應 Action 別名 | 查詢參數 | 回應內容摘要 |
 | :--- | :--- | :--- | :--- |
 | `GET /api/v1/dashboard/user-context` | `GET_USER_CONTEXT` | 無（自動讀取 `inn.getUserID()`） | 回傳當前登入使用者之 `user_id`、`login_name`、`user_name`、`team_code` (`user.team_id.keyed_name`)、`value_score`、`default_team_filter`、`is_team_restricted` (是否限制跨團隊查詢) |
-| `GET /api/v1/dashboard/team-summary` | `GET_TEAM_SUMMARY` | `state` (預設 `Active`), `project_type` (預設 `1.Standard,2.Professional`), `territory`, `team_id`, `keyword` | **首頁極速統計**：套用使用者團隊權限控管後，僅查詢 Project 主檔並依 `team_id/@keyed_name` 分組彙整各執行團隊專案數，一併回傳 `user_context` |
-| `GET /api/v1/dashboard/summary` | `GET_PORTFOLIO_SUMMARY` | `state`, `project_type`, `territory`, `team_id`, `pm_id`, `health_status`, `keyword` | 套用使用者團隊權限控管後之多專案 KPI 彙總、紅黃綠燈 (`rag_status`)、EVM、`team_performance`、`pm_performance`、含 `id` (供左側 Item Icon `uiShowItem` 開啟) 與 `Ph 1~12` 之專案清單 |
+| `GET /api/v1/dashboard/team-summary` | `GET_TEAM_SUMMARY` | `state` (預設 `Active`), `project_type` (預設 `1.Standard,2.Professional`), `territory`, `team_id`, `keyword`, `filter_blocked` | **首頁極速統計**：套用使用者團隊權限控管後，僅查詢 Project 主檔並依 `team_id/@keyed_name` 分組彙整各執行團隊專案數，一併回傳 `user_context` 與外部受阻統計 |
+| `GET /api/v1/dashboard/summary` | `GET_PORTFOLIO_SUMMARY` | `state`, `project_type`, `territory`, `team_id`, `pm_id`, `health_status`, `keyword`, `filter_blocked` (`all`/`exclude_external`/`only_external`), `stall_reason`, `is_substantially_completed` | 套用使用者團隊權限控管後之多專案 KPI 彙總、原始排程紅黃綠燈 (`rag_status`)、**團隊執行健康度 (`operational_rag`)**、**外部停滯統計 (`stall_summary`)**、**實質完工數 (`substantially_completed_count`)**、EVM、`team_performance`、`pm_performance`、含阻礙原因膠囊與校正延遲天數之專案清單 |
 | `GET /api/v1/dashboard/team/{team_id}` | `GET_TEAM_ANALYSIS` | `team_id`, `state` | 指定執行團隊 (`team_id`) 之專案進度、RAG 燈號分佈、PM 績效與風險專案明細 |
 | `GET /api/v1/dashboard/pm/{pm_id}` | `GET_PM_ANALYSIS` | `pm_id`, `state` | 指定專案經理 (`owned_by_id`) 負責之所有專案完成率、時程偏差、EVM 與狀態統計 |
 | `GET /api/v1/dashboard/project/{proj_num}` | `GET_PROJECT_DETAIL` | `proj_num` (專案編號或 ID) | 單一專案深度分析：基本與客製屬性、`Ph 1~12` 階段燈號、主階段 `WBS Element` 達成率與時程偏差天數、該專案成員任務負荷與工時回報統計 |

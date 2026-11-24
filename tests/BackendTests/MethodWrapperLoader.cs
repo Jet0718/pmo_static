@@ -71,6 +71,12 @@ public class AnalyticsQueryDto
     public int ProjNum { get; set; }
     // 是否由客戶端顯式傳入 team_id 參數
     public bool HasExplicitTeamId { get; set; }
+    // 外部受阻專案過濾 (all / exclude_external / only_external)
+    public string FilterBlocked { get; set; }
+    // 停滯阻礙原因篩選 (ALL / wait_cust_system / commercial_dispute / cust_hold / cust_scope_change / internal_bottleneck)
+    public string StallReasonFilter { get; set; }
+    // 是否僅篩選實質完工待收尾專案 (true / false / 空白)
+    public string IsSubstantialFilter { get; set; }
 
     /// <summary>
     /// 建構函式：初始化預設查詢條件
@@ -88,6 +94,9 @@ public class AnalyticsQueryDto
         this.NaturalQuery = "";
         this.ProjNum = 0;
         this.HasExplicitTeamId = false;
+        this.FilterBlocked = "all";
+        this.StallReasonFilter = "ALL";
+        this.IsSubstantialFilter = "";
     }
 }
 
@@ -255,6 +264,10 @@ public class ProjectRecord
     public int DelayDays { get; set; }
     // 暫停天數 (cn_pending_days)
     public int PendingDays { get; set; }
+    // 停滯阻礙原因 (cn_stall_reason: none / wait_cust_system / commercial_dispute / cust_hold / cust_scope_change / internal_bottleneck)
+    public string StallReason { get; set; }
+    // 外部停滯天數
+    public int StallDays { get; set; }
     // PV 計畫值 (cn_pv)
     public double PlannedValue { get; set; }
     // EV 實獲值 (cn_ev)
@@ -289,6 +302,8 @@ public class ProjectRecord
     {
         this.PhasePercentCompl = new int[12];
         this.PhaseStatusColor = new string[12];
+        this.StallReason = "none";
+        this.StallDays = 0;
         for (int i = 0; i < 12; i++)
         {
             this.PhasePercentCompl[i] = 0;
@@ -431,6 +446,20 @@ public class ProjectSummaryDto
     // 延遲與暫停天數
     public int DelayDays { get; set; }
     public int PendingDays { get; set; }
+    // 停滯阻礙原因代碼 (none / wait_cust_system / commercial_dispute / cust_hold / cust_scope_change / internal_bottleneck)
+    public string StallReason { get; set; }
+    // 歸因責任主體 (NONE / EXTERNAL / COMMERCIAL / INTERNAL)
+    public string StallType { get; set; }
+    // 停滯阻礙原因中文標籤
+    public string StallReasonLabel { get; set; }
+    // 是否實質完工待驗收 (完成率 >= 85% 且剩餘任務 <= 2)
+    public bool IsSubstantiallyCompleted { get; set; }
+    // 雙軌內部團隊執行健康度 (GREEN / YELLOW / RED / BLOCKED / SUBSTANTIAL)
+    public string OperationalHealth { get; set; }
+    // 內部執行健康度 RAG 標籤 (Green / Amber / Red / Blocked / Substantial)
+    public string OperationalRag { get; set; }
+    // 校正後延遲工作天數 (扣除外部停滯天數，防數據污染)
+    public int AdjustedDelayDays { get; set; }
     // EVM 與工時指標
     public double Spi { get; set; }
     public double Cpi { get; set; }
@@ -466,6 +495,13 @@ public class ProjectSummaryDto
     public ProjectSummaryDto()
     {
         this.Phases = new System.Collections.Generic.List<PhaseIndicatorDto>();
+        this.StallReason = "none";
+        this.StallType = "NONE";
+        this.StallReasonLabel = "正常推進";
+        this.IsSubstantiallyCompleted = false;
+        this.OperationalHealth = "GREEN";
+        this.OperationalRag = "Green";
+        this.AdjustedDelayDays = 0;
     }
 }
 
@@ -1016,6 +1052,10 @@ public class ProjectHealthCalculator : IProjectHealthCalculator
         dto.MilestoneCompletedCount = milestoneCompleted;
         // 延遲天數以工作日計算（比照 cn_Project_ScheduleUpdated 演算法），只記錄該專案任務中工作日延遲最多天數，並扣除暫停天數 (PendingDays)
         int netDelayDays = maxTaskDelayDays - proj.PendingDays;
+        if (netDelayDays <= 0 && (activities == null || activities.Count == 0) && proj.DelayDays > 0)
+        {
+            netDelayDays = proj.DelayDays - proj.PendingDays;
+        }
         if (netDelayDays < 0) netDelayDays = 0;
         dto.DelayDays = netDelayDays;
 
@@ -1146,7 +1186,93 @@ public class ProjectHealthCalculator : IProjectHealthCalculator
         }
 
         dto.RagStatus = MapHealthToRagStatus(dto.HealthStatus);
+
+        // 8. 判定停滯歸因、責任分離與雙軌內部執行健康度 (OperationalHealth)
+        string rawStallReason = (proj.StallReason ?? "").Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(rawStallReason)) rawStallReason = "none";
+        dto.StallReason = rawStallReason;
+
+        string stallType = "NONE";
+        string stallLabel = "正常推進";
+
+        if (rawStallReason == "wait_cust_system" || rawStallReason.Contains("cust_system") || rawStallReason.Contains("wait_customer"))
+        {
+            stallType = "EXTERNAL";
+            stallLabel = "等待客戶系統一併上線";
+        }
+        else if (rawStallReason == "commercial_dispute" || rawStallReason.Contains("dispute") || rawStallReason.Contains("commercial"))
+        {
+            stallType = "COMMERCIAL";
+            stallLabel = "商務/合約爭議";
+        }
+        else if (rawStallReason == "cust_hold" || rawStallReason.Contains("hold"))
+        {
+            stallType = "EXTERNAL";
+            stallLabel = "客戶端要求暫停";
+        }
+        else if (rawStallReason == "cust_scope_change" || rawStallReason.Contains("scope"))
+        {
+            stallType = "EXTERNAL";
+            stallLabel = "客戶需求變更評估中";
+        }
+        else if (rawStallReason == "internal_bottleneck" || rawStallReason.Contains("internal"))
+        {
+            stallType = "INTERNAL";
+            stallLabel = "內部技術/資源瓶頸";
+        }
+
+        dto.StallType = stallType;
+        dto.StallReasonLabel = stallLabel;
+
+        // 判定實質完工待驗收 (Substantially Completed)
+        // 條件：實際進度 >= 85%，且未完成工作任務 <= 2，且歸因非 INTERNAL
+        int unfinishedTasks = dto.TotalTasks - dto.CompletedTasks;
+        bool isSubstantial = (dto.ActualProgress >= 85.0 && unfinishedTasks <= 2 && stallType != "INTERNAL");
+        dto.IsSubstantiallyCompleted = isSubstantial;
+
+        // 判定內部團隊執行健康度 OperationalHealth
+        if (string.Equals(dto.State, "closed", System.StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(dto.State, "Completed", System.StringComparison.OrdinalIgnoreCase))
+        {
+            dto.OperationalHealth = "GREEN";
+        }
+        else if (isSubstantial)
+        {
+            dto.OperationalHealth = "SUBSTANTIAL";
+        }
+        else if (stallType == "EXTERNAL" || stallType == "COMMERCIAL")
+        {
+            dto.OperationalHealth = "BLOCKED";
+        }
+        else
+        {
+            dto.OperationalHealth = dto.HealthStatus;
+        }
+        dto.OperationalRag = MapOperationalHealthToRag(dto.OperationalHealth);
+
+        // 校正後延遲工作日 AdjustedDelayDays (扣除外部停滯天數，防數據污染)
+        if (stallType == "EXTERNAL" || stallType == "COMMERCIAL")
+        {
+            dto.AdjustedDelayDays = 0;
+        }
+        else
+        {
+            dto.AdjustedDelayDays = dto.DelayDays;
+        }
+
         return dto;
+    }
+
+    /// <summary>
+    /// 將 OperationalHealth 轉換為相容前端之 RAG 語意標籤
+    /// </summary>
+    public static string MapOperationalHealthToRag(string opHealth)
+    {
+        if (string.Equals(opHealth, "RED", System.StringComparison.OrdinalIgnoreCase)) return "Red";
+        if (string.Equals(opHealth, "YELLOW", System.StringComparison.OrdinalIgnoreCase)) return "Amber";
+        if (string.Equals(opHealth, "BLOCKED", System.StringComparison.OrdinalIgnoreCase)) return "Blocked";
+        if (string.Equals(opHealth, "SUBSTANTIAL", System.StringComparison.OrdinalIgnoreCase)) return "Substantial";
+        return "Green";
     }
 
     /// <summary>
@@ -2216,7 +2342,7 @@ public class ArasProjectRepository : IProjectRepository
             "cn_init_plan_start,cn_init_plan_finish,cn_initial_comp,cn_closed_date," +
             "rollup_percent_compl,bcs_rollup_percent_compl,cn_wbs_compl,cn_plan_compl," +
             "bcs_project_status_label,bcs_project_status,bcs_project_compl_cate," +
-            "cn_delay_days,cn_pending_days,cn_pv,cn_ev,cn_ac,bcs_total_work_time,bcs_total_workingtime_record," +
+            "cn_delay_days,cn_pending_days,cn_stall_reason,cn_pv,cn_ev,cn_ac,bcs_total_work_time,bcs_total_workingtime_record," +
             "cn_sv,cn_cv,cn_spi,cn_cpi,cn_exp_mandays,cn_wbs_rolwrkest,cn_remainder,cn_bug_imp_rate," +
             "percent_compl_1,status_1,percent_compl_2,status_2,percent_compl_3,status_3,percent_compl_4,status_4," +
             "percent_compl_5,status_5,percent_compl_6,status_6,percent_compl_7,status_7,percent_compl_8,status_8," +
@@ -2899,6 +3025,7 @@ public class ArasProjectRepository : IProjectRepository
 
         rec.DelayDays = ParseInt(item.getProperty("cn_delay_days", "0"), 0);
         rec.PendingDays = ParseInt(item.getProperty("cn_pending_days", "0"), 0);
+        rec.StallReason = item.getProperty("cn_stall_reason", "none");
         rec.PlannedValue = ParseDouble(item.getProperty("cn_pv", "0"), 0.0);
         rec.EarnedValue = ParseDouble(item.getProperty("cn_ev", "0"), 0.0);
 
@@ -3041,6 +3168,9 @@ public class ProjectAnalyticsController
 
             query.PmId = requestItem.getProperty("pm_id", "ALL");
             query.HealthFilter = requestItem.getProperty("health_status", "ALL");
+            query.FilterBlocked = requestItem.getProperty("filter_blocked", "all");
+            query.StallReasonFilter = requestItem.getProperty("stall_reason", "ALL");
+            query.IsSubstantialFilter = requestItem.getProperty("is_substantially_completed", "");
             query.Keyword = requestItem.getProperty("keyword", "");
             query.NaturalQuery = requestItem.getProperty("natural_query", "");
             query.ProjNum = ArasProjectRepository.ParseInt(requestItem.getProperty("proj_num", "0"), 0);
@@ -3272,6 +3402,19 @@ public class ProjectAnalyticsController
         int pendingCount = 0;
         int totalOverdueTasks = 0;
 
+        int opGreenCount = 0;
+        int opAmberCount = 0;
+        int opRedCount = 0;
+        int opBlockedCount = 0;
+        int opSubstantialCount = 0;
+
+        int stallWaitSystemCount = 0;
+        int stallDisputeCount = 0;
+        int stallHoldCount = 0;
+        int stallScopeCount = 0;
+        int stallInternalCount = 0;
+        int substantialTotalCount = 0;
+
         double sumProgress = 0.0;
         double sumSpi = 0.0;
         double sumCpi = 0.0;
@@ -3294,13 +3437,50 @@ public class ProjectAnalyticsController
 
             ProjectSummaryDto dto = this._healthCalc.ComputeProjectSummary(p, rWbs, pActs, asOfDate);
 
-            // 若有指定健康度燈號篩選，於此處過濾
+            // 若有外部受阻專案過濾 (filter_blocked)
+            if (query != null && !string.IsNullOrEmpty(query.FilterBlocked))
+            {
+                string fb = query.FilterBlocked.Trim().ToLowerInvariant();
+                if (fb == "exclude_external" && (dto.StallType == "EXTERNAL" || dto.StallType == "COMMERCIAL"))
+                {
+                    continue;
+                }
+                if (fb == "only_external" && dto.StallType != "EXTERNAL" && dto.StallType != "COMMERCIAL")
+                {
+                    continue;
+                }
+            }
+
+            // 停滯原因篩選
             if (query != null &&
-                !string.IsNullOrEmpty(query.HealthFilter) &&
-                !string.Equals(query.HealthFilter, "ALL", System.StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(dto.HealthStatus, query.HealthFilter, System.StringComparison.OrdinalIgnoreCase))
+                !string.IsNullOrEmpty(query.StallReasonFilter) &&
+                !string.Equals(query.StallReasonFilter, "ALL", System.StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(dto.StallReason, query.StallReasonFilter.Trim(), System.StringComparison.OrdinalIgnoreCase))
             {
                 continue;
+            }
+
+            // 實質完工待收尾篩選
+            if (query != null && !string.IsNullOrEmpty(query.IsSubstantialFilter))
+            {
+                bool reqSub = string.Equals(query.IsSubstantialFilter, "true", System.StringComparison.OrdinalIgnoreCase);
+                if (dto.IsSubstantiallyCompleted != reqSub)
+                {
+                    continue;
+                }
+            }
+
+            // 若有指定健康度燈號篩選，於此處過濾 (支援依整體燈號或內部執行燈號比對)
+            if (query != null &&
+                !string.IsNullOrEmpty(query.HealthFilter) &&
+                !string.Equals(query.HealthFilter, "ALL", System.StringComparison.OrdinalIgnoreCase))
+            {
+                bool matchRaw = string.Equals(dto.HealthStatus, query.HealthFilter, System.StringComparison.OrdinalIgnoreCase);
+                bool matchOp = string.Equals(dto.OperationalHealth, query.HealthFilter, System.StringComparison.OrdinalIgnoreCase);
+                if (!matchRaw && !matchOp)
+                {
+                    continue;
+                }
             }
 
             summaries.Add(dto);
@@ -3315,6 +3495,22 @@ public class ProjectAnalyticsController
             if (dto.HealthStatus == "RED") redCount++;
             else if (dto.HealthStatus == "YELLOW") yellowCount++;
             else greenCount++;
+
+            // 內部執行健康度統計
+            if (dto.OperationalHealth == "RED") opRedCount++;
+            else if (dto.OperationalHealth == "YELLOW") opAmberCount++;
+            else if (dto.OperationalHealth == "BLOCKED") opBlockedCount++;
+            else if (dto.OperationalHealth == "SUBSTANTIAL") opSubstantialCount++;
+            else opGreenCount++;
+
+            // 停滯阻礙細分類統計
+            if (dto.StallReason == "wait_cust_system") stallWaitSystemCount++;
+            else if (dto.StallReason == "commercial_dispute") stallDisputeCount++;
+            else if (dto.StallReason == "cust_hold") stallHoldCount++;
+            else if (dto.StallReason == "cust_scope_change") stallScopeCount++;
+            else if (dto.StallReason == "internal_bottleneck") stallInternalCount++;
+
+            if (dto.IsSubstantiallyCompleted) substantialTotalCount++;
 
             totalOverdueTasks += dto.OverdueTasks;
             sumProgress += dto.ActualProgress;
@@ -3334,6 +3530,12 @@ public class ProjectAnalyticsController
         double greenPct = totalProj > 0 ? System.Math.Round((double)greenCount / totalProj * 100.0, 1) : 0.0;
         double yellowPct = totalProj > 0 ? System.Math.Round((double)yellowCount / totalProj * 100.0, 1) : 0.0;
         double redPct = totalProj > 0 ? System.Math.Round((double)redCount / totalProj * 100.0, 1) : 0.0;
+
+        double opGreenPct = totalProj > 0 ? System.Math.Round((double)opGreenCount / totalProj * 100.0, 1) : 0.0;
+        double opAmberPct = totalProj > 0 ? System.Math.Round((double)opAmberCount / totalProj * 100.0, 1) : 0.0;
+        double opRedPct = totalProj > 0 ? System.Math.Round((double)opRedCount / totalProj * 100.0, 1) : 0.0;
+        double opBlockedPct = totalProj > 0 ? System.Math.Round((double)opBlockedCount / totalProj * 100.0, 1) : 0.0;
+        double opSubstantialPct = totalProj > 0 ? System.Math.Round((double)opSubstantialCount / totalProj * 100.0, 1) : 0.0;
 
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         sb.Append("{");
@@ -3359,6 +3561,30 @@ public class ProjectAnalyticsController
         sb.Append("\"amber_percent\":").Append(FormatNum(yellowPct)).Append(",");
         sb.Append("\"red_percent\":").Append(FormatNum(redPct));
         sb.Append("},");
+
+        sb.Append("\"operational_rag\":{");
+        sb.Append("\"green_count\":").Append(opGreenCount).Append(",");
+        sb.Append("\"amber_count\":").Append(opAmberCount).Append(",");
+        sb.Append("\"red_count\":").Append(opRedCount).Append(",");
+        sb.Append("\"blocked_count\":").Append(opBlockedCount).Append(",");
+        sb.Append("\"substantial_count\":").Append(opSubstantialCount).Append(",");
+        sb.Append("\"green_percent\":").Append(FormatNum(opGreenPct)).Append(",");
+        sb.Append("\"amber_percent\":").Append(FormatNum(opAmberPct)).Append(",");
+        sb.Append("\"red_percent\":").Append(FormatNum(opRedPct)).Append(",");
+        sb.Append("\"blocked_percent\":").Append(FormatNum(opBlockedPct)).Append(",");
+        sb.Append("\"substantial_percent\":").Append(FormatNum(opSubstantialPct));
+        sb.Append("},");
+
+        sb.Append("\"stall_summary\":{");
+        sb.Append("\"total_blocked\":").Append(opBlockedCount).Append(",");
+        sb.Append("\"wait_cust_system_count\":").Append(stallWaitSystemCount).Append(",");
+        sb.Append("\"commercial_dispute_count\":").Append(stallDisputeCount).Append(",");
+        sb.Append("\"cust_hold_count\":").Append(stallHoldCount).Append(",");
+        sb.Append("\"cust_scope_change_count\":").Append(stallScopeCount).Append(",");
+        sb.Append("\"internal_bottleneck_count\":").Append(stallInternalCount);
+        sb.Append("},");
+
+        sb.Append("\"substantially_completed_count\":").Append(substantialTotalCount).Append(",");
 
         sb.Append("\"evm_summary\":{");
         sb.Append("\"avg_spi\":").Append(FormatNum(avgSpi)).Append(",");
@@ -3706,6 +3932,13 @@ public class ProjectAnalyticsController
         sb.Append("\"compl_category\":\"").Append(EscapeJson(p.ComplCategory)).Append("\",");
         sb.Append("\"delay_days\":").Append(p.DelayDays).Append(",");
         sb.Append("\"pending_days\":").Append(p.PendingDays).Append(",");
+        sb.Append("\"stall_reason\":\"").Append(EscapeJson(p.StallReason)).Append("\",");
+        sb.Append("\"stall_type\":\"").Append(EscapeJson(p.StallType)).Append("\",");
+        sb.Append("\"stall_reason_label\":\"").Append(EscapeJson(p.StallReasonLabel)).Append("\",");
+        sb.Append("\"is_substantially_completed\":").Append(p.IsSubstantiallyCompleted ? "true" : "false").Append(",");
+        sb.Append("\"operational_health\":\"").Append(EscapeJson(p.OperationalHealth)).Append("\",");
+        sb.Append("\"operational_rag\":\"").Append(EscapeJson(p.OperationalRag)).Append("\",");
+        sb.Append("\"adjusted_delay_days\":").Append(p.AdjustedDelayDays).Append(",");
         sb.Append("\"spi\":").Append(FormatNum(p.Spi)).Append(",");
         sb.Append("\"cpi\":").Append(FormatNum(p.Cpi)).Append(",");
         sb.Append("\"planned_value\":").Append(FormatNum(p.PlannedValue)).Append(",");

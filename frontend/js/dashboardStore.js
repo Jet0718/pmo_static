@@ -39,6 +39,9 @@
       team_id: "ALL",
       pm_id: "ALL",
       health_status: "ALL",
+      filter_blocked: "all",
+      stall_reason: "ALL",
+      is_substantially_completed: "",
       keyword: ""
     };
     // 最新載入之統計資料快取
@@ -112,6 +115,9 @@
     this.filters.team_id = parsed.team_id;
     this.filters.pm_id = parsed.pm_id || "ALL";
     this.filters.health_status = parsed.health_status;
+    this.filters.filter_blocked = parsed.filter_blocked || "all";
+    this.filters.stall_reason = parsed.stall_reason || "ALL";
+    this.filters.is_substantially_completed = parsed.is_substantially_completed || "";
     this.filters.keyword = parsed.keyword;
 
     if (parsed.blocked_cross_team_attempt && this.userContext) {
@@ -164,6 +170,9 @@
       team_id: defaultTeam,
       pm_id: "ALL",
       health_status: "ALL",
+      filter_blocked: "all",
+      stall_reason: "ALL",
+      is_substantially_completed: "",
       keyword: ""
     };
     await this.refreshActiveView();

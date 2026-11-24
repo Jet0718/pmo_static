@@ -94,6 +94,37 @@
     return html;
   }
 
+  // 取得停滯歸因之繁體中文顯示標籤
+  function getStallReasonLabel(code = "") {
+    var c = String(code || "").trim().toLowerCase();
+    if (c === "wait_cust_system") return "等待客戶系統一併上線";
+    if (c === "commercial_dispute") return "商務/驗收追加款爭議";
+    if (c === "cust_hold") return "客戶端專案暫停/延後";
+    if (c === "cust_scope_change") return "客戶需求規格重大變更";
+    if (c === "internal_bottleneck") return "內部團隊資源/技術瓶頸";
+    return c || "無";
+  }
+
+  // 渲染專案阻礙停滯歸因與實質完工標籤徽章 (需求：區分外部非團隊因素與真落後，消除統計污染)
+  function renderProjectStallBadges(p = {}) {
+    var html = "";
+    if (p.stall_type === "EXTERNAL") {
+      var extLabel = p.stall_reason_label || getStallReasonLabel(p.stall_reason);
+      html += '<span class="badge-stall badge-stall-external" title="非團隊內部因素阻礙：' + escapeHtml(extLabel) + '">⏳ ' + escapeHtml(extLabel) + '</span>';
+    } else if (p.stall_type === "COMMERCIAL") {
+      var comLabel = p.stall_reason_label || getStallReasonLabel(p.stall_reason);
+      html += '<span class="badge-stall badge-stall-commercial" title="商務合約爭議：' + escapeHtml(comLabel) + '">📑 ' + escapeHtml(comLabel) + '</span>';
+    } else if (p.stall_type === "INTERNAL") {
+      html += '<span class="badge-stall badge-stall-internal" title="內部團隊執行落後，需介入排除瓶頸">🚨 團隊真落後</span>';
+    }
+
+    if (p.is_substantially_completed) {
+      var pct = Number(p.actual_progress || 0).toFixed(0);
+      html += '<span class="badge-stall badge-stall-substantial" title="主要任務已實質完成 (' + pct + '%)，僅餘少數驗收收尾事項">🏁 實質完工 (' + pct + '%)</span>';
+    }
+    return html;
+  }
+
   // 渲染當前自然語言解析後生效的篩選條件摘要膠囊與權限提示 (需求 1 & 需求 2)
   function renderActiveFilterSummaryHtml(store = null) {
     var f = (store && store.filters) || {
@@ -102,6 +133,9 @@
       territory: "ALL",
       team_id: "ALL",
       health_status: "ALL",
+      filter_blocked: "all",
+      stall_reason: "ALL",
+      is_substantially_completed: "",
       keyword: ""
     };
     var notice = (store && store.restrictionNotice) || "";
@@ -113,6 +147,20 @@
       '<span class="active-filter-pill' + (f.team_id !== "ALL" ? " highlight" : "") + '">執行團隊: ' + escapeHtml(f.team_id) + '</span>' +
       '<span class="active-filter-pill' + (f.territory !== "ALL" ? " highlight" : "") + '">服務中心: ' + escapeHtml(f.territory) + '</span>' +
       '<span class="active-filter-pill' + (f.health_status !== "ALL" ? " highlight" : "") + '">健康度燈號: ' + escapeHtml(f.health_status) + '</span>';
+
+    if (f.filter_blocked === "exclude_external") {
+      html += '<span class="active-filter-pill highlight filter-pill-purify">🛡️ 排除外部受阻 (淨化戰況)</span>';
+    } else if (f.filter_blocked === "only_external") {
+      html += '<span class="active-filter-pill highlight filter-pill-blocked">⏳ 僅檢視外部受阻專案</span>';
+    }
+
+    if (f.stall_reason && f.stall_reason !== "ALL") {
+      html += '<span class="active-filter-pill highlight">阻礙歸因: ' + escapeHtml(getStallReasonLabel(f.stall_reason)) + '</span>';
+    }
+
+    if (f.is_substantially_completed === "true") {
+      html += '<span class="active-filter-pill highlight filter-pill-substantial">🏁 實質完工待收尾</span>';
+    }
 
     if (f.keyword) {
       html += '<span class="active-filter-pill highlight">關鍵字: ' + escapeHtml(f.keyword) + '</span>';
@@ -260,12 +308,17 @@
         '<div class="kpi-card" style="border-left-color:#ef4444;">' +
           '<span class="kpi-label">紅燈嚴重延遲 (Red)</span>' +
           '<div class="kpi-value" id="kpi-red-count" style="color:#ef4444;">' + rag.red_count + '</div>' +
-          '<span class="kpi-sub">逾期未完成任務總計: ' + s.total_overdue_tasks + ' 項</span>' +
+          '<span class="kpi-sub">合約落後: ' + rag.red_count + ' 案 | 團隊真落後: ' + (((data.operational_rag && data.operational_rag.red_count) !== undefined) ? data.operational_rag.red_count : rag.red_count) + ' 案</span>' +
         '</div>' +
         '<div class="kpi-card" style="border-left-color:#8b5cf6;">' +
-          '<span class="kpi-label">全域 EVM 績效 (SPI / CPI)</span>' +
-          '<div class="kpi-value" id="kpi-evm-index">' + Number(evm.avg_spi || 0).toFixed(2) + ' / ' + Number(evm.avg_cpi || 0).toFixed(2) + '</div>' +
-          '<span class="kpi-sub">PV: ' + evm.total_planned_value + 'h | EV: ' + evm.total_earned_value + 'h | AC: ' + evm.total_actual_cost + 'h</span>' +
+          '<span class="kpi-label">外部非團隊受阻 (Blocked)</span>' +
+          '<div class="kpi-value" id="kpi-blocked-count" style="color:#8b5cf6;">' + ((data.operational_rag && data.operational_rag.blocked_count) || 0) + '</div>' +
+          '<span class="kpi-sub">等客戶系統/商務爭議 | 不給懲罰性紅燈</span>' +
+        '</div>' +
+        '<div class="kpi-card" style="border-left-color:#3b82f6;">' +
+          '<span class="kpi-label">實質完工待收尾 (>=85%)</span>' +
+          '<div class="kpi-value" id="kpi-substantial-count" style="color:#3b82f6;">' + (data.substantially_completed_count || 0) + '</div>' +
+          '<span class="kpi-sub">主任務達標 | 全域 EVM: ' + Number(evm.avg_spi || 0).toFixed(2) + ' / ' + Number(evm.avg_cpi || 0).toFixed(2) + '</span>' +
         '</div>' +
       '</div>';
 
@@ -291,6 +344,21 @@
       var spiColor = p.spi >= 0.95 ? "#10b981" : (p.spi >= 0.8 ? "#f59e0b" : "#ef4444");
       var cpiColor = p.cpi >= 0.95 ? "#10b981" : (p.cpi >= 0.8 ? "#f59e0b" : "#ef4444");
 
+      // 雙軌健康度與阻礙徽章渲染
+      var healthHtml = '<span class="health-badge health-' + light + '"><span class="health-dot"></span>' + getHealthLabelText(light) + '</span>';
+      if (p.operational_health && p.operational_health !== light) {
+        var opCls = p.operational_health === "BLOCKED" ? "op-health-blocked" : (p.operational_health === "SUBSTANTIAL" ? "op-health-substantial" : "op-health-" + p.operational_health);
+        var opText = p.operational_health === "BLOCKED" ? "🛡️ 外部受阻" : (p.operational_health === "SUBSTANTIAL" ? "🏁 實質完工" : p.operational_health);
+        healthHtml += '<div style="margin-top:4px;"><span class="op-health-badge ' + opCls + '" title="內部團隊執行健康度：' + opText + '">' + opText + '</span></div>';
+      }
+
+      var delayTextHtml = "";
+      if (p.stall_type === "EXTERNAL" || p.stall_type === "COMMERCIAL") {
+        delayTextHtml = '<span style="color:#10b981;font-weight:700;" title="非內部團隊因素停滯，延遲工作天數校正為 0 天">校正延遲: 0 天</span> <small style="color:#94a3b8;text-decoration:line-through;" title="合約原始排程延遲 ' + p.delay_days + ' 天">(' + p.delay_days + '天)</small>';
+      } else {
+        delayTextHtml = '延遲: ' + p.delay_days + ' 天';
+      }
+
       // 需求 4：在專案清單左側增加一個 Item Icon，點擊可在 Aras Innovator 系統中開啟該專案 Item 畫面
       rowsHtml +=
         '<tr data-proj-num="' + p.proj_num + '" data-project-id="' + escapeHtml(p.id || "") + '">' +
@@ -306,11 +374,14 @@
             '</div>' +
           '</td>' +
           '<td>' +
-            '<div style="font-weight:700;color:#0f172a;">' + escapeHtml(p.project_name) + '</div>' +
+            '<div style="font-weight:700;color:#0f172a;display:flex;align-items:center;flex-wrap:wrap;gap:6px;">' +
+              escapeHtml(p.project_name) +
+              renderProjectStallBadges(p) +
+            '</div>' +
             '<div style="font-size:12px;color:#64748b;">客戶: ' + escapeHtml(p.customer_name || "-") + ' | 服務中心: ' + escapeHtml(p.territory || "-") + '</div>' +
           '</td>' +
           '<td><div>' + escapeHtml(p.pm_name) + '</div><small style="color:#64748b;">' + escapeHtml(p.team_name) + '</small></td>' +
-          '<td><span class="health-badge health-' + light + '"><span class="health-dot"></span>' + getHealthLabelText(light) + '</span></td>' +
+          '<td>' + healthHtml + '</td>' +
           '<td>' +
             '<div class="progress-bar-wrap">' +
               '<div class="progress-track"><div class="progress-fill" style="width:' + Math.min(100, p.actual_progress) + '%;background:' + barColor + ';"></div></div>' +
@@ -325,7 +396,7 @@
           '</td>' +
           '<td>' +
             '<div>完成 ' + p.completed_tasks + ' / 總數 ' + p.total_tasks + '</div>' +
-            '<div style="font-size:11px;color:' + (p.overdue_tasks > 0 ? "#ef4444;font-weight:700;" : "#64748b;") + '">逾期: ' + p.overdue_tasks + ' 項 | 延遲: ' + p.delay_days + ' 天</div>' +
+            '<div style="font-size:11px;color:' + (p.overdue_tasks > 0 ? "#ef4444;font-weight:700;" : "#64748b;") + '">逾期: ' + p.overdue_tasks + ' 項 | ' + delayTextHtml + '</div>' +
           '</td>' +
         '</tr>';
     });

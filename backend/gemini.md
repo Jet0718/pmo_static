@@ -85,3 +85,29 @@
     - 設定 `IsTeamRestricted = true`，後端在所有查詢端點 (`team-summary`、`summary`、`assignees` 等) 強制覆寫 `query.TeamId = userContext.TeamCode`，嚴格禁止查詢其他執行團隊資料。
   - 若 `user.value_score` 為 `V9` 或 `V10`（或使用者不屬於 `TPS/SUS/SHS/ICS`，如 `PMO`），則 `IsTeamRestricted = false`，允許透過自然語言篩選或點擊長條圖查詢全部或其他執行團隊。
 - **使用者上下文端點與回傳**：提供 `GET /api/v1/dashboard/user-context`（並在 `team-summary` 與 `summary` 一併附帶 `user_context` JSON 節點），讓前端可即時呈現當前使用者身份、所屬團隊、職等 (`value_score`) 與權限鎖定狀態。
+
+## 7. 停滯阻礙歸因、雙軌健康度判定與延遲校正防數據污染規範 (`Stall Attribution & Dual Health`)
+1. **停滯原因分類 (`StallReason`) 與歸因維度 (`StallType`)**：
+   - 支援從 `Project.cn_stall_reason`（或相容欄位）讀取停滯代碼，並映射歸納：
+     - `none`：正常推進，歸因 `NONE`
+     - `wait_cust_system`：等待客戶其他系統一併上線，歸因 `EXTERNAL`
+     - `commercial_dispute`：商務/合約/追加款爭議，歸因 `COMMERCIAL`
+     - `cust_scope_change`：客戶需求重大變更/重估，歸因 `EXTERNAL`
+     - `cust_hold`：客戶要求暫停，歸因 `EXTERNAL`
+     - `internal_bottleneck`：內部技術/資源瓶頸，歸因 `INTERNAL`
+2. **實質完工待收尾 (`is_substantially_completed`) 自動識別**：
+   - 當專案實際完成率 $\text{ActualProgress} \ge 85\%$，且未完成之非里程碑工作任務數 $\le 2$ 且無內部技術阻礙時，系統自動標註 `IsSubstantiallyCompleted = true`，作為交付長尾指標。
+3. **雙軌健康度分流 (`OperationalHealth` vs `HealthStatus`)**：
+   - `HealthStatus`：保留原生整體時程/EVM 判定（紅/黃/綠），反映對客戶之基準線交付風險。
+   - `OperationalHealth` (團隊執行健康度)：
+     - 若專案為 `EXTERNAL` 或 `COMMERCIAL` 受阻，團隊健康度不計懲罰性紅燈，標註為 `BLOCKED`（或依任務內部進度維持黃/綠）。
+     - 若專案為 `is_substantially_completed` 且受外部卡關，團隊健康度標註為 `SUBSTANTIAL` (實質完工) 或綠燈。
+     - 僅有歸因為 `INTERNAL` 或無外部阻礙卻逾期/落後者，才亮團隊紅燈 (`RED`，真落後)。
+4. **校正後延遲工作天數 (`AdjustedDelayDays`)**：
+   - 針對外部受阻專案，延遲天數扣除停滯天數（包含 `cn_pending_days` 與阻礙登記天數），確保團隊不承擔客戶端停滯造成的時間膨脹。
+5. **KPI 聚合分流與過濾參數**：
+   - 後端在 `/api/v1/dashboard/summary` 輸出中新增：
+     - `operational_rag`：淨化後的團隊執行健康度分佈 (綠/黃/紅/受阻)。
+     - `stall_summary`：外部受阻與商務爭議案件統計與各分類佔比。
+     - `substantially_completed_count`：實質完工專案數。
+   - 支援請求參數 `filter_blocked` (`exclude_external`, `only_external`, `all`)，支援前端一鍵「排除外部受阻」淨化儀表板。

@@ -39,3 +39,23 @@
 - **WBS 階段自然排序**：`renderProjectDetailView` 與 `renderWbsStageDeviationChart` 必須對 `wbs_items` 依名稱進行自然升冪排序（如 `10 啟動階段` &rarr; `20 需求分析`）。
 - **成員負荷扣除里程碑並呈現所有指派成員**：單一專案成員負荷與全域成員負荷圖表均正確渲染 `Activity2.managed_by_id` 統計之所有指派成員，且扣除 `is_milestone == '1'` 里程碑任務。
 - **工作任務狀態不計里程碑與延遲天數以工作日計算只記錄最大天數**：多專案總覽列表最後一欄「工作任務狀態與延遲天數」之「完成 X / 總數 Y」與「逾期: Z 項」皆不計 `is_milestone` 任務；「延遲: W 天」以企業日曆工作日計算（比照 `cn_Project_ScheduleUpdated` 扣除週末與休假日），僅呈現該專案所有工作任務中延遲迄今最多的工作日天數扣除暫停天數（非累加）。
+
+## 6. 停滯阻礙標籤、雙軌健康度分流視覺化與 NoUI 查詢擴充規範 (`Stall Attribution & NoUI Expansion`)
+1. **自然語言 NoUI 關鍵字擴充 (`parseNaturalLanguageQuery`)**：
+   - 識別「**真落後**」、「**內部落後**」&rarr; 設定 `health_status = RED` 且 `filter_blocked = exclude_external`（排除外部受阻，只看團隊內部問題）。
+   - 識別「**等待客戶**」、「**等客戶系統**」&rarr; 設定 `stall_reason = wait_cust_system`。
+   - 識別「**商務爭議**」、「**合約爭議**」&rarr; 設定 `stall_reason = commercial_dispute`。
+   - 識別「**外部受阻**」、「**外部卡關**」&rarr; 設定 `filter_blocked = only_external`。
+   - 識別「**實質完工**」、「**待驗收**」&rarr; 設定 `is_substantially_completed = true`。
+   - 識別「**排除外部**」、「**排除受阻**」&rarr; 設定 `filter_blocked = exclude_external`。
+2. **頂層 KPI 統計分流卡片**：
+   - 保留全域健康度總覽，並新增兩個高價值指標：
+     - **外部受阻專案 (Externally Blocked)**：顯示因等待客戶系統、商務爭議等受阻專案數與其佔比（紫色/橙色徽章）。
+     - **實質完工待收尾 (Substantial Complete $\ge 85\%$)**：顯示已完成大部分工作、等待最終交付驗收之專案數。
+   - 提供快捷按鈕/提示標籤，可一鍵切換「淨化團隊戰況（排除外部受阻）」或「查看外部受阻池」。
+3. **專案列表與明細之阻礙徽章 (Badge)**：
+   - 在專案清單之專案名稱旁渲染標籤膠囊：
+     - `[等客戶系統]` (紫色標籤 `.badge-wait-system`)
+     - `[商務爭議]` (橙色標籤 `.badge-dispute`)
+     - `[實質完工 92%]` (藍色標籤 `.badge-substantial`)
+   - 延遲天數欄位滑鼠懸停顯示 Tooltip：「工作日延遲 X 天（已校正扣除停滯 Y 天）」。

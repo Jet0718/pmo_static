@@ -33,6 +33,13 @@
       expected_progress: 78.0,
       progress_gap: 1.5,
       health_status: "GREEN",
+      operational_health: "GREEN",
+      operational_rag: "Green",
+      stall_reason: "none",
+      stall_type: "NONE",
+      stall_reason_label: "",
+      is_substantially_completed: false,
+      adjusted_delay_days: 0,
       rag_status: "Green",
       bcs_status_label: "On Track",
       bcs_status_color: "#10B981",
@@ -160,6 +167,13 @@
       expected_progress: 72.0,
       progress_gap: 14.0,
       health_status: "YELLOW",
+      operational_health: "YELLOW",
+      operational_rag: "Amber",
+      stall_reason: "none",
+      stall_type: "NONE",
+      stall_reason_label: "",
+      is_substantially_completed: false,
+      adjusted_delay_days: 6,
       rag_status: "Amber",
       bcs_status_label: "Caution",
       bcs_status_color: "#FFD800",
@@ -278,6 +292,13 @@
       expected_progress: 70.0,
       progress_gap: 29.0,
       health_status: "RED",
+      operational_health: "BLOCKED",
+      operational_rag: "Blocked",
+      stall_reason: "wait_cust_system",
+      stall_type: "EXTERNAL",
+      stall_reason_label: "等待客戶系統一併上線",
+      is_substantially_completed: false,
+      adjusted_delay_days: 0,
       rag_status: "Red",
       bcs_status_label: "Behind",
       bcs_status_color: "#FF0000",
@@ -396,6 +417,13 @@
       expected_progress: 100.0,
       progress_gap: 0.0,
       health_status: "GREEN",
+      operational_health: "GREEN",
+      operational_rag: "Green",
+      stall_reason: "none",
+      stall_type: "NONE",
+      stall_reason_label: "",
+      is_substantially_completed: false,
+      adjusted_delay_days: 0,
       rag_status: "Green",
       bcs_status_label: "Completed",
       bcs_status_color: "#00FF00",
@@ -484,6 +512,13 @@
       expected_progress: 80.0,
       progress_gap: -2.0,
       health_status: "GREEN",
+      operational_health: "GREEN",
+      operational_rag: "Green",
+      stall_reason: "none",
+      stall_type: "NONE",
+      stall_reason_label: "",
+      is_substantially_completed: false,
+      adjusted_delay_days: 0,
       rag_status: "Green",
       bcs_status_label: "On Track",
       bcs_status_color: "#10B981",
@@ -546,6 +581,13 @@
       expected_progress: 65.0,
       progress_gap: 0.0,
       health_status: "GREEN",
+      operational_health: "GREEN",
+      operational_rag: "Green",
+      stall_reason: "none",
+      stall_type: "NONE",
+      stall_reason_label: "",
+      is_substantially_completed: false,
+      adjusted_delay_days: 0,
       rag_status: "Green",
       bcs_status_label: "On Track",
       bcs_status_color: "#10B981",
@@ -577,6 +619,201 @@
       init_plan_start: "2026-07-01",
       init_plan_finish: "2026-12-15",
       act_start: "2026-07-01",
+      act_finish: "",
+      phases: [],
+      wbs_items: [],
+      assignees: []
+    },
+    {
+      id: "G70708091011A222B333C404D505E606",
+      proj_num: 2175,
+      project_name: "車載中控 HMI 系統升級專案",
+      project_type: "1.Standard",
+      classification: "1.Standard",
+      territory: "台北服務中心",
+      project_mode: "Turnkey",
+      customer_name: "台聯車電工業",
+      po_number: "PO-2026-1305",
+      state: "Active",
+      pm_id: "PM_CHEN",
+      pm_name: "陳建宏",
+      manager_name: "林總監",
+      team_id: "TPS",
+      team_name: "TPS 顧問團隊",
+      wbs_id: "WBS_ROOT_2175",
+      percent_complete: 92.0,
+      actual_progress: 92.0,
+      expected_progress: 100.0,
+      progress_gap: 8.0,
+      health_status: "YELLOW",
+      operational_health: "SUBSTANTIAL",
+      operational_rag: "Substantial",
+      stall_reason: "cust_hold",
+      stall_type: "EXTERNAL",
+      stall_reason_label: "客戶端專案暫停/延後",
+      is_substantially_completed: true,
+      adjusted_delay_days: 0,
+      rag_status: "Amber",
+      bcs_status_label: "Substantially Completed",
+      bcs_status_color: "#3B82F6",
+      compl_category: "90%~100%",
+      delay_days: 12,
+      pending_days: 12,
+      spi: 0.92,
+      cpi: 1.05,
+      planned_value: 500,
+      earned_value: 460,
+      actual_cost: 438,
+      cn_sv: -40,
+      cn_cv: 22,
+      exp_mandays: 60,
+      rollup_work_est: 480,
+      remainder_hours: 38,
+      budget_exec_rate: 91.2,
+      total_tasks: 10,
+      completed_tasks: 9,
+      in_progress_tasks: 1,
+      not_started_tasks: 0,
+      overdue_tasks: 1,
+      critical_task_count: 2,
+      critical_overdue_count: 0,
+      milestone_count: 2,
+      milestone_completed_count: 2,
+      sched_start: "2026-04-01",
+      sched_due: "2026-10-15",
+      init_plan_start: "2026-04-01",
+      init_plan_finish: "2026-10-15",
+      act_start: "2026-04-01",
+      act_finish: "",
+      phases: [],
+      wbs_items: [],
+      assignees: []
+    },
+    {
+      id: "H80809101112A333B444C505D606E707",
+      proj_num: 2188,
+      project_name: "智慧供應商協同平台微服務重構案",
+      project_type: "2.Professional",
+      classification: "2.Professional",
+      territory: "台中服務中心",
+      project_mode: "Turnkey",
+      customer_name: "寶成鞋業集團",
+      po_number: "PO-2026-1410",
+      state: "Active",
+      pm_id: "PM_LIU",
+      pm_name: "劉雅雯",
+      manager_name: "林總監",
+      team_id: "ICS",
+      team_name: "ICS 顧問團隊",
+      wbs_id: "WBS_ROOT_2188",
+      percent_complete: 35.0,
+      actual_progress: 35.0,
+      expected_progress: 75.0,
+      progress_gap: 40.0,
+      health_status: "RED",
+      operational_health: "RED",
+      operational_rag: "Red",
+      stall_reason: "internal_bottleneck",
+      stall_type: "INTERNAL",
+      stall_reason_label: "內部團隊資源不足/技術瓶頸",
+      is_substantially_completed: false,
+      adjusted_delay_days: 22,
+      rag_status: "Red",
+      bcs_status_label: "Behind",
+      bcs_status_color: "#EF4444",
+      compl_category: "30%~40%",
+      delay_days: 22,
+      pending_days: 0,
+      spi: 0.47,
+      cpi: 0.62,
+      planned_value: 900,
+      earned_value: 423,
+      actual_cost: 682,
+      cn_sv: -477,
+      cn_cv: -259,
+      exp_mandays: 110,
+      rollup_work_est: 880,
+      remainder_hours: 572,
+      budget_exec_rate: 75.8,
+      total_tasks: 14,
+      completed_tasks: 4,
+      in_progress_tasks: 4,
+      not_started_tasks: 6,
+      overdue_tasks: 6,
+      critical_task_count: 3,
+      critical_overdue_count: 2,
+      milestone_count: 3,
+      milestone_completed_count: 1,
+      sched_start: "2026-05-15",
+      sched_due: "2026-11-20",
+      init_plan_start: "2026-05-15",
+      init_plan_finish: "2026-11-20",
+      act_start: "2026-05-15",
+      act_finish: "",
+      phases: [],
+      wbs_items: [],
+      assignees: []
+    },
+    {
+      id: "I90910111213A444B555C606D707E808",
+      proj_num: 2190,
+      project_name: "大中華區 ERP 雙軌會計整合案",
+      project_type: "1.Standard",
+      classification: "1.Standard",
+      territory: "新竹服務中心",
+      project_mode: "Standard",
+      customer_name: "聯電實業集團",
+      po_number: "PO-2026-1520",
+      state: "Active",
+      pm_id: "PM_CHEN",
+      pm_name: "陳建宏",
+      manager_name: "林總監",
+      team_id: "SHS",
+      team_name: "SHS 顧問團隊",
+      wbs_id: "WBS_ROOT_2190",
+      percent_complete: 88.0,
+      actual_progress: 88.0,
+      expected_progress: 100.0,
+      progress_gap: 12.0,
+      health_status: "RED",
+      operational_health: "BLOCKED",
+      operational_rag: "Blocked",
+      stall_reason: "commercial_dispute",
+      stall_type: "COMMERCIAL",
+      stall_reason_label: "商務/驗收追加款爭議",
+      is_substantially_completed: true,
+      adjusted_delay_days: 0,
+      rag_status: "Red",
+      bcs_status_label: "Commercial Dispute",
+      bcs_status_color: "#F97316",
+      compl_category: "80%~90%",
+      delay_days: 30,
+      pending_days: 30,
+      spi: 0.88,
+      cpi: 0.95,
+      planned_value: 1200,
+      earned_value: 1056,
+      actual_cost: 1111,
+      cn_sv: -144,
+      cn_cv: -55,
+      exp_mandays: 150,
+      rollup_work_est: 1200,
+      remainder_hours: 144,
+      budget_exec_rate: 92.6,
+      total_tasks: 12,
+      completed_tasks: 11,
+      in_progress_tasks: 1,
+      not_started_tasks: 0,
+      overdue_tasks: 1,
+      critical_task_count: 2,
+      critical_overdue_count: 0,
+      milestone_count: 3,
+      milestone_completed_count: 3,
+      sched_start: "2026-03-01",
+      sched_due: "2026-09-30",
+      init_plan_start: "2026-03-01",
+      init_plan_finish: "2026-09-30",
+      act_start: "2026-03-01",
       act_finish: "",
       phases: [],
       wbs_items: [],
@@ -672,6 +909,11 @@
   // 常用自然語言篩選條件提示清單 (供 NoUI 介面渲染 Prompt Chips 點擊快速帶入)
   var COMMON_NL_PROMPT_CHIPS = [
     { label: "進行中 Standard/Professional (預設)", query: "進行中 Standard Professional" },
+    { label: "🚨 團隊真落後 (排除外部受阻)", query: "真落後" },
+    { label: "⏳ 等待客戶系統一併上線", query: "等待客戶系統" },
+    { label: "📑 商務/合約爭議專案", query: "商務爭議" },
+    { label: "🏁 實質完工待收尾 (>=85%)", query: "實質完工" },
+    { label: "🛡️ 淨化戰況 (排除外部受阻)", query: "進行中 排除外部" },
     { label: "紅燈嚴重延遲專案", query: "進行中 紅燈" },
     { label: "黃燈進度警示專案", query: "進行中 黃燈" },
     { label: "綠燈進度正常專案", query: "進行中 綠燈" },
@@ -699,6 +941,9 @@
       team_id: defaultTeam,
       pm_id: "ALL",
       health_status: "ALL",
+      filter_blocked: "all",
+      stall_reason: "ALL",
+      is_substantially_completed: "",
       keyword: "",
       has_explicit_team: false,
       blocked_cross_team_attempt: false
@@ -769,6 +1014,45 @@
     } else if (/(綠燈|進度正常|正常專案|良好|\bgreen\b)/i.test(working)) {
       parsed.health_status = "GREEN";
       working = working.replace(/(綠燈|進度正常|正常專案|良好|\bgreen\b)/gi, " ");
+    }
+
+    // 3.5 解析停滯阻礙、責任分離與數據淨化維度 (filter_blocked / stall_reason / is_substantially_completed)
+    if (/(真落後|內部落後|實質落後|真實落後)/i.test(working)) {
+      parsed.health_status = "RED";
+      parsed.filter_blocked = "exclude_external";
+      working = working.replace(/(真落後|內部落後|實質落後|真實落後)/gi, " ");
+    } else if (/(排除外部受阻|排除外部停滯|排除外部|排除受阻|淨化戰況|淨化)/i.test(working)) {
+      parsed.filter_blocked = "exclude_external";
+      working = working.replace(/(排除外部受阻|排除外部停滯|排除外部|排除受阻|淨化戰況|淨化)/gi, " ");
+    } else if (/(外部受阻|外部卡關|受阻專案|外部停滯)/i.test(working)) {
+      parsed.filter_blocked = "only_external";
+      working = working.replace(/(外部受阻|外部卡關|受阻專案|外部停滯)/gi, " ");
+    }
+
+    if (/(等待客戶系統一併上線|等待客戶系統|等客戶系統|等客戶上線|等待客戶)/i.test(working)) {
+      parsed.stall_reason = "wait_cust_system";
+      if (parsed.filter_blocked === "all") parsed.filter_blocked = "only_external";
+      working = working.replace(/(等待客戶系統一併上線|等待客戶系統|等客戶系統|等客戶上線|等待客戶)/gi, " ");
+    } else if (/(商務爭議|合約爭議|商務糾紛|追加款爭議|合約問題)/i.test(working)) {
+      parsed.stall_reason = "commercial_dispute";
+      if (parsed.filter_blocked === "all") parsed.filter_blocked = "only_external";
+      working = working.replace(/(商務爭議|合約爭議|商務糾紛|追加款爭議|合約問題)/gi, " ");
+    } else if (/(客戶要求暫停|客戶暫停|客戶凍結)/i.test(working)) {
+      parsed.stall_reason = "cust_hold";
+      if (parsed.filter_blocked === "all") parsed.filter_blocked = "only_external";
+      working = working.replace(/(客戶要求暫停|客戶暫停|客戶凍結)/gi, " ");
+    } else if (/(客戶需求變更|需求變更評估|規格變更)/i.test(working)) {
+      parsed.stall_reason = "cust_scope_change";
+      if (parsed.filter_blocked === "all") parsed.filter_blocked = "only_external";
+      working = working.replace(/(客戶需求變更|需求變更評估|規格變更)/gi, " ");
+    } else if (/(內部瓶頸|內部技術卡關|內部架構問題|內部技術瓶頸)/i.test(working)) {
+      parsed.stall_reason = "internal_bottleneck";
+      working = working.replace(/(內部瓶頸|內部技術卡關|內部架構問題|內部技術瓶頸)/gi, " ");
+    }
+
+    if (/(實質完工待收尾|實質完工|待驗收專案|待驗收|收尾中)/i.test(working)) {
+      parsed.is_substantially_completed = "true";
+      working = working.replace(/(實質完工待收尾|實質完工|待驗收專案|待驗收|收尾中)/gi, " ");
     }
 
     // 4. 解析服務中心 (territory)
@@ -901,7 +1185,21 @@
       if (pmFilter && pmFilter !== "ALL" && p.pm_id !== pmFilter) {
         return false;
       }
-      if (healthFilter && healthFilter !== "ALL" && p.health_status !== healthFilter) {
+      if (healthFilter && healthFilter !== "ALL") {
+        var matchRaw = p.health_status === healthFilter;
+        var matchOp = p.operational_health === healthFilter;
+        if (!matchRaw && !matchOp) return false;
+      }
+      if (filters.filter_blocked === "exclude_external" && (p.stall_type === "EXTERNAL" || p.stall_type === "COMMERCIAL")) {
+        return false;
+      }
+      if (filters.filter_blocked === "only_external" && p.stall_type !== "EXTERNAL" && p.stall_type !== "COMMERCIAL") {
+        return false;
+      }
+      if (filters.stall_reason && filters.stall_reason !== "ALL" && p.stall_reason !== filters.stall_reason) {
+        return false;
+      }
+      if (filters.is_substantially_completed === "true" && !p.is_substantially_completed) {
         return false;
       }
       if (keyword) {
@@ -917,6 +1215,18 @@
     var greenCount = 0;
     var amberCount = 0;
     var redCount = 0;
+    var opGreenCount = 0;
+    var opAmberCount = 0;
+    var opRedCount = 0;
+    var opBlockedCount = 0;
+    var opSubstantialCount = 0;
+    var stallWaitSystemCount = 0;
+    var stallDisputeCount = 0;
+    var stallHoldCount = 0;
+    var stallScopeCount = 0;
+    var stallInternalCount = 0;
+    var substantialTotalCount = 0;
+
     var activeCount = 0;
     var closedCount = 0;
     var pendingCount = 0;
@@ -942,6 +1252,21 @@
       if (p.health_status === "RED") redCount++;
       else if (p.health_status === "YELLOW") amberCount++;
       else greenCount++;
+
+      var opHealth = p.operational_health || p.health_status;
+      if (opHealth === "RED") opRedCount++;
+      else if (opHealth === "YELLOW") opAmberCount++;
+      else if (opHealth === "BLOCKED") opBlockedCount++;
+      else if (opHealth === "SUBSTANTIAL") opSubstantialCount++;
+      else opGreenCount++;
+
+      if (p.stall_reason === "wait_cust_system") stallWaitSystemCount++;
+      else if (p.stall_reason === "commercial_dispute") stallDisputeCount++;
+      else if (p.stall_reason === "cust_hold") stallHoldCount++;
+      else if (p.stall_reason === "cust_scope_change") stallScopeCount++;
+      else if (p.stall_reason === "internal_bottleneck") stallInternalCount++;
+
+      if (p.is_substantially_completed) substantialTotalCount++;
 
       totalOverdueTasks += safeNumber(p.overdue_tasks, 0);
       progSum += safeNumber(p.actual_progress, 0);
@@ -1052,6 +1377,27 @@
         amber_percent: count > 0 ? Number(((amberCount / count) * 100).toFixed(1)) : 0,
         red_percent: count > 0 ? Number(((redCount / count) * 100).toFixed(1)) : 0
       },
+      operational_rag: {
+        green_count: opGreenCount,
+        amber_count: opAmberCount,
+        red_count: opRedCount,
+        blocked_count: opBlockedCount,
+        substantial_count: opSubstantialCount,
+        green_percent: count > 0 ? Number(((opGreenCount / count) * 100).toFixed(1)) : 0,
+        amber_percent: count > 0 ? Number(((opAmberCount / count) * 100).toFixed(1)) : 0,
+        red_percent: count > 0 ? Number(((opRedCount / count) * 100).toFixed(1)) : 0,
+        blocked_percent: count > 0 ? Number(((opBlockedCount / count) * 100).toFixed(1)) : 0,
+        substantial_percent: count > 0 ? Number(((opSubstantialCount / count) * 100).toFixed(1)) : 0
+      },
+      stall_summary: {
+        total_blocked: opBlockedCount,
+        wait_cust_system_count: stallWaitSystemCount,
+        commercial_dispute_count: stallDisputeCount,
+        cust_hold_count: stallHoldCount,
+        cust_scope_change_count: stallScopeCount,
+        internal_bottleneck_count: stallInternalCount
+      },
+      substantially_completed_count: substantialTotalCount,
       evm_summary: {
         avg_spi: count > 0 ? Number((spiSum / count).toFixed(2)) : 0,
         avg_cpi: count > 0 ? Number((cpiSum / count).toFixed(2)) : 0,
